@@ -7,7 +7,7 @@ on:
 jobs:
   build_ios:
     name: Build iOS
-    runs-on: macos-13
+    runs-on: macos-14
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -15,16 +15,28 @@ jobs:
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
-        flutter-version: '3.19.6'
-        channel: 'stable'
+        channel: 'stable' # latest stable
         
     - name: Flutter version check
-      run: flutter --version
+      run: |
+        flutter --version
+        dart --version
         
     - name: Install dependencies
       run: |
-        flutter pub get --verbose
+        # Retry a few times in case of transient network issues
+        for i in 1 2 3; do
+          flutter pub get --verbose && break || {
+            echo "pub get failed (attempt $i), retrying in 10s...";
+            sleep 10;
+          }
+        done
       
+    - name: CocoaPods repo update (iOS)
+      run: |
+        pod --version
+        pod repo update
+
     - name: Build iOS (unsigned)
       run: |
         flutter build ios --release --no-codesign --verbose
