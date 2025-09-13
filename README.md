@@ -50,3 +50,14 @@ Sonra Actions > `iOS TestFlight` > Run workflow ile tetikleyebilirsiniz.
 Oluşan dosyalar:
  - APK: `build/app/outputs/flutter-apk/app-release.apk`
  - AAB: `build/app/outputs/bundle/release/app-release.aab`
+
+### GitHub Actions ile Otomatik İmzalı Build
+`Android Release` workflow’u (tag push veya manuel) imzalı APK/AAB üretir.
+
+Gerekli Secrets (Settings > Secrets > Actions):
+- `ANDROID_KEYSTORE_B64`: `android/keystore/release.keystore` dosyasının base64 içeriği
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+Manuel tetikleme: Actions > Android Release > Run workflow.
