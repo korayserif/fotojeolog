@@ -124,7 +124,11 @@ jobs:
           DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           xcodebuild -version
-          SECURITY_MULTIPLEXING=1 flutter build ipa --release --export-options-plist=ios/exportOptions.dynamic.plist --verbose
+          echo "Using bundle id: $(/usr/libexec/PlistBuddy -c 'Print:PRODUCT_BUNDLE_IDENTIFIER' ios/Runner.xcodeproj/project.pbxproj 2>/dev/null || echo "(see patched file)")"
+          # Unique build number to avoid duplicate upload errors
+          BUILD_NUMBER=${GITHUB_RUN_NUMBER}
+          echo "CI build-number=${BUILD_NUMBER}"
+          SECURITY_MULTIPLEXING=1 flutter build ipa --release --build-number=${BUILD_NUMBER} --export-options-plist=ios/exportOptions.dynamic.plist --verbose
 
       - name: Upload to TestFlight
         env:
@@ -135,7 +139,8 @@ jobs:
           # Prepare App Store Connect API private key file for altool
           mkdir -p ~/.appstoreconnect/private_keys
           KEY_PATH=~/.appstoreconnect/private_keys/${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
-          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > "$KEY_PATH"
+          # Accept either raw or base64-encoded p8 content
+          (echo "$APP_STORE_CONNECT_PRIVATE_KEY" | base64 --decode > "$KEY_PATH" 2>/dev/null) || echo "$APP_STORE_CONNECT_PRIVATE_KEY" > "$KEY_PATH"
           chmod 600 "$KEY_PATH"
           IPA_PATH=$(ls build/ios/ipa/*.ipa | head -n 1)
           xcrun altool --upload-app -f "$IPA_PATH" -t ios --apiKey "$APP_STORE_CONNECT_KEY_IDENTIFIER" --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID" --verbose
