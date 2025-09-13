@@ -41,11 +41,14 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   Future<void> _takePicture() async {
     final ImagePicker picker = ImagePicker();
-    final XFile? pickedFile = await picker.pickImage(source: ImageSource.camera);
+    final XFile? pickedFile = await picker.pickImage(
+      source: ImageSource.camera,
+    );
     if (pickedFile != null && mounted) {
       await Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (context) => photo.PhotoDrawPage.fromImage(File(pickedFile.path)),
+          builder: (context) =>
+              photo.PhotoDrawPage.fromImage(File(pickedFile.path)),
         ),
       );
     }
@@ -59,11 +62,7 @@ class _HomePageState extends State<HomePage> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF0F1215),
-              Color(0xFF1B1F24),
-              Color(0xFF2A2F35),
-            ],
+            colors: [Color(0xFF0F1215), Color(0xFF1B1F24), Color(0xFF2A2F35)],
           ),
         ),
         child: SafeArea(
@@ -77,16 +76,18 @@ class _HomePageState extends State<HomePage> {
                   child: Stack(
                     children: [
                       Positioned.fill(
-                        child: CustomPaint(
-                          painter: _TunnelPatternPainter(),
-                        ),
+                        child: CustomPaint(painter: _TunnelPatternPainter()),
                       ),
                       Align(
                         alignment: Alignment.centerLeft,
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: const [
-                            Icon(Icons.engineering, color: Color(0xFFFFC107), size: 36),
+                            Icon(
+                              Icons.engineering,
+                              color: Color(0xFFFFC107),
+                              size: 36,
+                            ),
                             SizedBox(width: 12),
                             Text(
                               'Jeoloji\nFotoğraflama',
@@ -110,13 +111,20 @@ class _HomePageState extends State<HomePage> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 16,
+                            horizontal: 20,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.black.withOpacity(0.15),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: const Color(0x33FFC107)),
                           ),
-                          child: const Icon(Icons.engineering, color: Color(0xFFFFC107), size: 40),
+                          child: const Icon(
+                            Icons.engineering,
+                            color: Color(0xFFFFC107),
+                            size: 40,
+                          ),
                         ),
                         const SizedBox(height: 20),
                         ElevatedButton.icon(
@@ -157,7 +165,10 @@ class _HomePageState extends State<HomePage> {
                 const SizedBox(height: 12),
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black.withOpacity(0.25),
                     borderRadius: BorderRadius.circular(12),
@@ -166,7 +177,11 @@ class _HomePageState extends State<HomePage> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: const [
-                      Icon(Icons.engineering, size: 16, color: Color(0xFFFFC107)),
+                      Icon(
+                        Icons.engineering,
+                        size: 16,
+                        color: Color(0xFFFFC107),
+                      ),
                       SizedBox(width: 8),
                       Text(
                         'Geliştirici: Adil Koray Şerifağaoğlu',

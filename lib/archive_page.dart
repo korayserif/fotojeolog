@@ -147,6 +147,64 @@ class _ArchivePageState extends State<ArchivePage> {
     }
   }
 
+  Future<void> _deletePhoto(File photoFile) async {
+    // Onay dialogu göster
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF2D1B0E),
+        title: const Row(
+          children: [
+            Icon(Icons.delete_forever, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Fotoğrafı Sil', style: TextStyle(color: Colors.white)),
+          ],
+        ),
+        content: const Text(
+          'Bu fotoğrafı kalıcı olarak silmek istediğinizden emin misiniz?',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('İptal', style: TextStyle(color: Colors.orange)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Sil', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await photoFile.delete();
+        // Fotoğraf listesini yeniden yükle
+        if (_currentKmPath != null) {
+          await _loadPhotos(_currentKmPath!);
+        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Fotoğraf başarıyla silindi'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } catch (e) {
+        debugPrint('Fotoğraf silme hatası: $e');
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Fotoğraf silinemedi'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _pickFromGalleryToCurrentKm() async {
     if (_currentKmPath == null) return;
     try {
@@ -462,30 +520,53 @@ class _ArchivePageState extends State<ArchivePage> {
                   Positioned(
                     right: 6,
                     top: 6,
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(20),
-                        onTap: () async {
-                          try {
-                            await Share.shareXFiles([XFile(photoFile.path)]);
-                          } catch (e) {
-                            debugPrint('Paylaşım hatası: $e');
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Paylaşım yapılamadı')),
-                            );
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: Colors.black54,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Silme butonu
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
                             borderRadius: BorderRadius.circular(20),
+                            onTap: () => _deletePhoto(photoFile),
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withOpacity(0.8),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Icon(Icons.delete, color: Colors.white, size: 18),
+                            ),
                           ),
-                          child: const Icon(Icons.share, color: Colors.white, size: 18),
                         ),
-                      ),
+                        const SizedBox(width: 6),
+                        // Paylaşım butonu
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: () async {
+                              try {
+                                await Share.shareXFiles([XFile(photoFile.path)]);
+                              } catch (e) {
+                                debugPrint('Paylaşım hatası: $e');
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Paylaşım yapılamadı')),
+                                );
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Icon(Icons.share, color: Colors.white, size: 18),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],

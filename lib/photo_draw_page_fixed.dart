@@ -27,10 +27,11 @@ class PhotoDrawPage extends StatefulWidget {
   final File? initialImage;
   final String? saveDirectoryPath; // Hedef klasör (isteğe bağlı)
 
-  const PhotoDrawPage({super.key, this.saveDirectoryPath}) : initialImage = null;
+  const PhotoDrawPage({super.key, this.saveDirectoryPath})
+    : initialImage = null;
 
   const PhotoDrawPage.fromImage(File image, {super.key, this.saveDirectoryPath})
-      : initialImage = image;
+    : initialImage = image;
 
   @override
   State<PhotoDrawPage> createState() => _PhotoDrawPageState();
@@ -46,7 +47,8 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
   double strokeOpacity = 1.0;
   bool _isEraser = false;
   bool _showGrid = false;
-  final TransformationController _transformController = TransformationController();
+  final TransformationController _transformController =
+      TransformationController();
   final GlobalKey _globalKey = GlobalKey();
   // Çizim koordinatlarını düzgün almak için viewer key'i
   final GlobalKey _viewerKey = GlobalKey();
@@ -163,7 +165,8 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
     String? defaultKat;
     String? defaultAyna;
     String? defaultKm;
-    if (widget.saveDirectoryPath != null && widget.saveDirectoryPath!.isNotEmpty) {
+    if (widget.saveDirectoryPath != null &&
+        widget.saveDirectoryPath!.isNotEmpty) {
       final segments = widget.saveDirectoryPath!
           .replaceAll('\\', '/')
           .split('/')
@@ -188,29 +191,44 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
           builder: (context, setLocal) {
             return AlertDialog(
               backgroundColor: const Color(0xFF1E2428),
-              title: const Text('Kayıt Sınıflandırması', style: TextStyle(color: Colors.white)),
+              title: const Text(
+                'Kayıt Sınıflandırması',
+                style: TextStyle(color: Colors.white),
+              ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   TextField(
                     controller: katCtrl,
-                    decoration: const InputDecoration(labelText: 'Kat', labelStyle: TextStyle(color: Colors.white70)),
+                    decoration: const InputDecoration(
+                      labelText: 'Kat',
+                      labelStyle: TextStyle(color: Colors.white70),
+                    ),
                     style: const TextStyle(color: Colors.white),
                   ),
                   TextField(
                     controller: aynaCtrl,
-                    decoration: const InputDecoration(labelText: 'Ayna', labelStyle: TextStyle(color: Colors.white70)),
+                    decoration: const InputDecoration(
+                      labelText: 'Ayna',
+                      labelStyle: TextStyle(color: Colors.white70),
+                    ),
                     style: const TextStyle(color: Colors.white),
                   ),
                   TextField(
                     controller: kmCtrl,
-                    decoration: const InputDecoration(labelText: 'Kilometre', labelStyle: TextStyle(color: Colors.white70)),
+                    decoration: const InputDecoration(
+                      labelText: 'Kilometre',
+                      labelStyle: TextStyle(color: Colors.white70),
+                    ),
                     style: const TextStyle(color: Colors.white),
                   ),
                   if (error != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 8.0),
-                      child: Text(error!, style: const TextStyle(color: Colors.redAccent)),
+                      child: Text(
+                        error!,
+                        style: const TextStyle(color: Colors.redAccent),
+                      ),
                     ),
                 ],
               ),
@@ -228,7 +246,11 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
                       setLocal(() => error = 'Lütfen tüm alanları doldurun');
                       return;
                     }
-                    Navigator.pop(context, {'kat': kat, 'ayna': ayna, 'km': km});
+                    Navigator.pop(context, {
+                      'kat': kat,
+                      'ayna': ayna,
+                      'km': km,
+                    });
                   },
                   child: const Text('Kaydet'),
                 ),
@@ -280,7 +302,8 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
           initialStrokeWidth: strokeWidth,
           initialStrokeOpacity: strokeOpacity,
           onStrokeWidthChanged: (value) => setState(() => strokeWidth = value),
-          onStrokeOpacityChanged: (value) => setState(() => strokeOpacity = value),
+          onStrokeOpacityChanged: (value) =>
+              setState(() => strokeOpacity = value),
         );
       },
     );
@@ -298,7 +321,11 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
         title: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.landscape, color: Colors.orange, size: 22), // Jeoloji ikonuna değişti
+            Icon(
+              Icons.landscape,
+              color: Colors.orange,
+              size: 22,
+            ), // Jeoloji ikonuna değişti
             SizedBox(width: 6),
             Flexible(
               child: Text(
@@ -385,7 +412,10 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
                                   decoration: BoxDecoration(
                                     color: Colors.orange.withOpacity(0.15),
                                     borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: Colors.orange.withOpacity(0.4), width: 2),
+                                    border: Border.all(
+                                      color: Colors.orange.withOpacity(0.4),
+                                      width: 2,
+                                    ),
                                     boxShadow: [
                                       BoxShadow(
                                         color: Colors.orange.withOpacity(0.2),
@@ -396,7 +426,11 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
                                   ),
                                   child: const Column(
                                     children: [
-                                      Icon(Icons.landscape, color: Colors.orange, size: 52),
+                                      Icon(
+                                        Icons.landscape,
+                                        color: Colors.orange,
+                                        size: 52,
+                                      ),
                                       SizedBox(height: 12),
                                       Text(
                                         'Jeoloji Fotoğraflama',
@@ -422,9 +456,14 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
                                 if (PlatformUtils.supportsCamera)
                                   Container(
                                     width: double.infinity,
-                                    margin: const EdgeInsets.symmetric(horizontal: 20),
+                                    margin: const EdgeInsets.symmetric(
+                                      horizontal: 20,
+                                    ),
                                     child: ElevatedButton.icon(
-                                      icon: const Icon(Icons.camera_alt, color: Colors.white),
+                                      icon: const Icon(
+                                        Icons.camera_alt,
+                                        color: Colors.white,
+                                      ),
                                       label: const Text(
                                         'Sahadan Fotoğraf Çek',
                                         style: TextStyle(
@@ -433,23 +472,36 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
-                                      onPressed: _isLoading ? null : () => _pickImage(ImageSource.camera),
+                                      onPressed: _isLoading
+                                          ? null
+                                          : () =>
+                                                _pickImage(ImageSource.camera),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: Colors.orange,
-                                        padding: const EdgeInsets.symmetric(vertical: 16),
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 16,
+                                        ),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(10),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
                                         ),
                                         elevation: 3,
                                       ),
                                     ),
                                   ),
-                                if (PlatformUtils.supportsCamera) const SizedBox(height: 16),
+                                if (PlatformUtils.supportsCamera)
+                                  const SizedBox(height: 16),
                                 Container(
                                   width: double.infinity,
-                                  margin: const EdgeInsets.symmetric(horizontal: 20),
+                                  margin: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                  ),
                                   child: ElevatedButton.icon(
-                                    icon: const Icon(Icons.photo_library, color: Color(0xFF2D1B0E)),
+                                    icon: const Icon(
+                                      Icons.photo_library,
+                                      color: Color(0xFF2D1B0E),
+                                    ),
                                     label: const Text(
                                       'Galeriden Seç',
                                       style: TextStyle(
@@ -458,10 +510,14 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
-                                    onPressed: _isLoading ? null : () => _pickImage(ImageSource.gallery),
+                                    onPressed: _isLoading
+                                        ? null
+                                        : () => _pickImage(ImageSource.gallery),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.amber,
-                                      padding: const EdgeInsets.symmetric(vertical: 16),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 16,
+                                      ),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(10),
                                       ),
@@ -480,12 +536,15 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
                                 key: _globalKey,
                                 child: InteractiveViewer(
                                   key: _viewerKey,
-                                  transformationController: _transformController,
+                                  transformationController:
+                                      _transformController,
                                   panEnabled: false,
                                   minScale: 1.0,
                                   maxScale: 5.0,
                                   child: _imageSize == null
-                                      ? Center(child: Image.file(_selectedImage!))
+                                      ? Center(
+                                          child: Image.file(_selectedImage!),
+                                        )
                                       : SizedBox(
                                           width: _imageSize!.width,
                                           height: _imageSize!.height,
@@ -499,15 +558,26 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
                                               ),
                                               GestureDetector(
                                                 onPanStart: (details) {
-                                                  final box = _viewerKey.currentContext?.findRenderObject() as RenderBox?;
+                                                  final box =
+                                                      _viewerKey.currentContext
+                                                              ?.findRenderObject()
+                                                          as RenderBox?;
                                                   if (box == null) return;
-                                                  final local = box.globalToLocal(details.globalPosition);
-                                                  final scenePoint = _transformController.toScene(local);
+                                                  final local = box
+                                                      .globalToLocal(
+                                                        details.globalPosition,
+                                                      );
+                                                  final scenePoint =
+                                                      _transformController
+                                                          .toScene(local);
                                                   setState(() {
                                                     _strokes.add(
                                                       Stroke(
                                                         points: [scenePoint],
-                                                        color: selectedColor.withOpacity(strokeOpacity),
+                                                        color: selectedColor
+                                                            .withOpacity(
+                                                              strokeOpacity,
+                                                            ),
                                                         width: strokeWidth,
                                                         isEraser: _isEraser,
                                                       ),
@@ -516,17 +586,32 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
                                                   });
                                                 },
                                                 onPanUpdate: (details) {
-                                                  final box = _viewerKey.currentContext?.findRenderObject() as RenderBox?;
-                                                  if (box == null || _strokes.isEmpty) return;
-                                                  final local = box.globalToLocal(details.globalPosition);
-                                                  final scenePoint = _transformController.toScene(local);
+                                                  final box =
+                                                      _viewerKey.currentContext
+                                                              ?.findRenderObject()
+                                                          as RenderBox?;
+                                                  if (box == null ||
+                                                      _strokes.isEmpty)
+                                                    return;
+                                                  final local = box
+                                                      .globalToLocal(
+                                                        details.globalPosition,
+                                                      );
+                                                  final scenePoint =
+                                                      _transformController
+                                                          .toScene(local);
                                                   setState(() {
-                                                    _strokes.last.points.add(scenePoint);
+                                                    _strokes.last.points.add(
+                                                      scenePoint,
+                                                    );
                                                   });
                                                 },
                                                 child: CustomPaint(
                                                   size: Size.infinite,
-                                                  painter: _DrawingPainter(strokes: _strokes, showGrid: _showGrid),
+                                                  painter: _DrawingPainter(
+                                                    strokes: _strokes,
+                                                    showGrid: _showGrid,
+                                                  ),
                                                 ),
                                               ),
                                             ],
@@ -569,17 +654,23 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
                                     _buildToolButton(
                                       icon: Icons.undo,
                                       color: Colors.orange,
-                                      onPressed: _strokes.isNotEmpty ? _undo : null,
+                                      onPressed: _strokes.isNotEmpty
+                                          ? _undo
+                                          : null,
                                     ),
                                     _buildToolButton(
                                       icon: Icons.redo,
                                       color: Colors.orange,
-                                      onPressed: _redoStack.isNotEmpty ? _redo : null,
+                                      onPressed: _redoStack.isNotEmpty
+                                          ? _redo
+                                          : null,
                                     ),
                                     _buildToolButton(
                                       icon: Icons.delete_outline,
                                       color: Colors.red,
-                                      onPressed: _strokes.isNotEmpty ? _clear : null,
+                                      onPressed: _strokes.isNotEmpty
+                                          ? _clear
+                                          : null,
                                     ),
                                     _buildToolButton(
                                       icon: Icons.palette,
@@ -588,24 +679,44 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
                                         showDialog(
                                           context: context,
                                           builder: (context) => AlertDialog(
-                                            backgroundColor: const Color(0xFF2D1B0E),
+                                            backgroundColor: const Color(
+                                              0xFF2D1B0E,
+                                            ),
                                             title: const Row(
                                               children: [
-                                                Icon(Icons.palette, color: Colors.orange),
+                                                Icon(
+                                                  Icons.palette,
+                                                  color: Colors.orange,
+                                                ),
                                                 SizedBox(width: 8),
-                                                Text('Renk Seç', style: TextStyle(color: Colors.white)),
+                                                Text(
+                                                  'Renk Seç',
+                                                  style: TextStyle(
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
                                               ],
                                             ),
                                             content: SingleChildScrollView(
                                               child: BlockPicker(
                                                 pickerColor: selectedColor,
-                                                onColorChanged: (color) => setState(() => selectedColor = color),
+                                                onColorChanged: (color) =>
+                                                    setState(
+                                                      () =>
+                                                          selectedColor = color,
+                                                    ),
                                               ),
                                             ),
                                             actions: [
                                               TextButton(
-                                                onPressed: () => Navigator.pop(context),
-                                                child: const Text('Kapat', style: TextStyle(color: Colors.orange)),
+                                                onPressed: () =>
+                                                    Navigator.pop(context),
+                                                child: const Text(
+                                                  'Kapat',
+                                                  style: TextStyle(
+                                                    color: Colors.orange,
+                                                  ),
+                                                ),
                                               ),
                                             ],
                                           ),
@@ -613,8 +724,12 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
                                       },
                                     ),
                                     _buildToolButton(
-                                      icon: _isEraser ? Icons.cleaning_services : Icons.cleaning_services_outlined,
-                                      color: _isEraser ? Colors.red : Colors.grey,
+                                      icon: _isEraser
+                                          ? Icons.cleaning_services
+                                          : Icons.cleaning_services_outlined,
+                                      color: _isEraser
+                                          ? Colors.red
+                                          : Colors.grey,
                                       onPressed: _toggleEraser,
                                       isSelected: _isEraser,
                                     ),
@@ -700,7 +815,8 @@ class _DrawingPainter extends CustomPainter {
         // renk önemsiz; clear modunda şeffaf çizilecek
       }
 
-      final path = Path()..moveTo(stroke.points.first.dx, stroke.points.first.dy);
+      final path = Path()
+        ..moveTo(stroke.points.first.dx, stroke.points.first.dy);
       for (int i = 1; i < stroke.points.length; i++) {
         path.lineTo(stroke.points[i].dx, stroke.points[i].dy);
       }
@@ -783,9 +899,9 @@ class _BrushSettingsWidgetState extends State<_BrushSettingsWidget> {
               ),
             ],
           ),
-          
+
           const SizedBox(height: 32),
-          
+
           // Kalınlık
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -794,39 +910,46 @@ class _BrushSettingsWidgetState extends State<_BrushSettingsWidget> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'Kalınlık', 
+                    'Kalınlık',
                     style: TextStyle(
-                      color: Colors.white70, 
+                      color: Colors.white70,
                       fontSize: 16,
-                      fontWeight: FontWeight.w500
-                    )
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.amber.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      _strokeWidth.toStringAsFixed(1), 
+                      _strokeWidth.toStringAsFixed(1),
                       style: const TextStyle(
-                        color: Colors.amber, 
+                        color: Colors.amber,
                         fontWeight: FontWeight.bold,
-                        fontSize: 14
-                      )
+                        fontSize: 14,
+                      ),
                     ),
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 16),
-              
+
               // Kalınlık Slider
               SliderTheme(
                 data: SliderTheme.of(context).copyWith(
                   trackHeight: 6,
-                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 14),
-                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 24),
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 14,
+                  ),
+                  overlayShape: const RoundSliderOverlayShape(
+                    overlayRadius: 24,
+                  ),
                   activeTrackColor: Colors.amber,
                   inactiveTrackColor: Colors.white.withOpacity(0.2),
                   thumbColor: Colors.amber,
@@ -845,9 +968,9 @@ class _BrushSettingsWidgetState extends State<_BrushSettingsWidget> {
               ),
             ],
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // Opaklık
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -856,39 +979,46 @@ class _BrushSettingsWidgetState extends State<_BrushSettingsWidget> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'Opaklık', 
+                    'Opaklık',
                     style: TextStyle(
-                      color: Colors.white70, 
+                      color: Colors.white70,
                       fontSize: 16,
-                      fontWeight: FontWeight.w500
-                    )
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.amber.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      '${(_strokeOpacity * 100).round()}%', 
+                      '${(_strokeOpacity * 100).round()}%',
                       style: const TextStyle(
-                        color: Colors.amber, 
+                        color: Colors.amber,
                         fontWeight: FontWeight.bold,
-                        fontSize: 14
-                      )
+                        fontSize: 14,
+                      ),
                     ),
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 16),
-              
+
               // Opaklık Slider
               SliderTheme(
                 data: SliderTheme.of(context).copyWith(
                   trackHeight: 6,
-                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 14),
-                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 24),
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 14,
+                  ),
+                  overlayShape: const RoundSliderOverlayShape(
+                    overlayRadius: 24,
+                  ),
                   activeTrackColor: Colors.amber,
                   inactiveTrackColor: Colors.white.withOpacity(0.2),
                   thumbColor: Colors.amber,
@@ -907,7 +1037,7 @@ class _BrushSettingsWidgetState extends State<_BrushSettingsWidget> {
               ),
             ],
           ),
-          
+
           const SizedBox(height: 20),
         ],
       ),
