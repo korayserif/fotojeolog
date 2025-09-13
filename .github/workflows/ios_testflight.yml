@@ -1,6 +1,13 @@
 name: iOS TestFlight
 
 on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/ios_testflight.yml'
+      - 'ios/**'
+      - 'lib/**'
+      - 'pubspec.yaml'
   workflow_dispatch:
 
 jobs:
@@ -125,5 +132,10 @@ jobs:
           APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.ASC_KEY_ID }}
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.ASC_API_KEY_P8 }}
         run: |
+          # Prepare App Store Connect API private key file for altool
+          mkdir -p ~/.appstoreconnect/private_keys
+          KEY_PATH=~/.appstoreconnect/private_keys/${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
+          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > "$KEY_PATH"
+          chmod 600 "$KEY_PATH"
           IPA_PATH=$(ls build/ios/ipa/*.ipa | head -n 1)
           xcrun altool --upload-app -f "$IPA_PATH" -t ios --apiKey "$APP_STORE_CONNECT_KEY_IDENTIFIER" --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID" --verbose
