@@ -32,3 +32,21 @@ GitHub Actions’daki `iOS Build` workflow’u imzasız IPA oluşturur ve artefa
 - IOS_PROVISIONING_PROFILE: App Store (Distribution) provisioning profile (base64)
 
 Sonra Actions > `iOS TestFlight` > Run workflow ile tetikleyebilirsiniz.
+
+## Android: İmzalı APK/Bundle
+
+1) Keystore oluştur (Windows cmd):
+	- JDK yüklü olsun, sonra:
+	  - `keytool -genkey -v -keystore android\keystore\fotojeolog.keystore -alias fotojeolog -keyalg RSA -keysize 2048 -validity 36500`
+	- Doldurduğun parola ve alias’ı not et.
+
+2) `android/key.properties` dosyasını oluştur:
+	- `android/key.properties.sample` dosyasını kopyalayıp parolaları doldur.
+
+3) İmzalı derleme:
+	- APK: `flutter build apk --release`
+	- App Bundle: `flutter build appbundle --release`
+
+Oluşan dosyalar:
+ - APK: `build/app/outputs/flutter-apk/app-release.apk`
+ - AAB: `build/app/outputs/bundle/release/app-release.aab`
