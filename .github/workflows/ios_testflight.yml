@@ -59,25 +59,65 @@ jobs:
       - name: Xcode provisioning
         run: |
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          UUID=$(uuidgen)
-          cp signing/profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
+          # Use a deterministic name based on profile UUID
+          PROFILE_UUID=$(security cms -D -i signing/profile.mobileprovision | /usr/libexec/PlistBuddy -c 'Print:UUID' /dev/stdin)
+          cp signing/profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$PROFILE_UUID.mobileprovision
 
       - name: CocoaPods repo update
         run: |
           pod repo update
 
-      - name: Prepare exportOptions.plist (team id)
+      - name: Prepare bundle id & exportOptions.plist
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          IOS_BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID }}
         run: |
-          sed -i '' "s/__TEAM_ID__/${APPLE_TEAM_ID}/g" ios/exportOptions.plist
+          # Extract data from provisioning profile
+          security cms -D -i signing/profile.mobileprovision > signing/profile.plist
+          PROFILE_NAME=$(/usr/libexec/PlistBuddy -c 'Print:Name' signing/profile.plist)
+          APP_ID=$(/usr/libexec/PlistBuddy -c 'Print:Entitlements:application-identifier' signing/profile.plist)
+          TEAM_PREFIX=$(echo "$APP_ID" | sed -E 's/\..*$//')
+          BUNDLE_FROM_PROFILE=$(echo "$APP_ID" | sed -E 's/^[^.]+\.//')
+
+          # Prefer explicit secret if provided, else use profile bundle id
+          FINAL_BUNDLE_ID=${IOS_BUNDLE_ID:-$BUNDLE_FROM_PROFILE}
+
+          # Patch project bundle identifiers to match
+          sed -i '' "s/com.example.yeniClean/${FINAL_BUNDLE_ID}/g" ios/Runner.xcodeproj/project.pbxproj
+          # Patch DEVELOPMENT_TEAM in project settings
+          sed -i '' -E "s/DEVELOPMENT_TEAM = [A-Z0-9]+;/DEVELOPMENT_TEAM = ${APPLE_TEAM_ID};/g" ios/Runner.xcodeproj/project.pbxproj || true
+
+          # Create dynamic exportOptions for manual signing
+          cat > ios/exportOptions.dynamic.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store</string>
+            <key>teamID</key>
+            <string>${APPLE_TEAM_ID}</string>
+            <key>uploadSymbols</key>
+            <true/>
+            <key>compileBitcode</key>
+            <false/>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>${FINAL_BUNDLE_ID}</key>
+              <string>${PROFILE_NAME}</string>
+            </dict>
+          </dict>
+          </plist>
+          EOF
 
       - name: Build iOS (codesign)
         env:
           DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           xcodebuild -version
-          SECURITY_MULTIPLEXING=1 flutter build ipa --release --export-options-plist=ios/exportOptions.plist --verbose
+          SECURITY_MULTIPLEXING=1 flutter build ipa --release --export-options-plist=ios/exportOptions.dynamic.plist --verbose
 
       - name: Upload to TestFlight
         env:
