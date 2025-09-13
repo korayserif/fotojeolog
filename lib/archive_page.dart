@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:fotojeolog/photo_draw_page.dart' as photo;
 import 'package:share_plus/share_plus.dart';
@@ -41,8 +40,8 @@ class _ArchivePageState extends State<ArchivePage> {
   Future<void> _loadArchiveStructure() async {
     setState(() => _isLoading = true);
     try {
-      final baseDir = await getApplicationDocumentsDirectory();
-      final rootDir = Directory(baseDir.path);
+      // Galeri konumunu kullan (DCIM/FotoJeolog)
+      final rootDir = Directory('/storage/emulated/0/DCIM/FotoJeolog');
       
       if (!rootDir.existsSync()) {
         setState(() => _isLoading = false);
