@@ -12,8 +12,7 @@ import 'error_handler.dart';
 import 'platform_utils.dart';
 import 'models/sticky_note.dart';
 import 'services/google_drive_service.dart';
-import 'services/photo_metadata_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'services/firebase_storage_service.dart';
 import 'permissions_helper.dart';
 
 // Kaydetme hedefi: klasör ve kat/ayna/km bilgileri
@@ -48,8 +47,8 @@ class PhotoDrawPage extends StatefulWidget {
   const PhotoDrawPage({super.key, this.saveDirectoryPath})
       : initialImage = null, driveJsonPath = null, driveKmPath = null;
 
-  const PhotoDrawPage.fromImage(File image, {super.key, this.saveDirectoryPath, this.driveKmPath, String? jsonPath})
-      : initialImage = image, driveJsonPath = jsonPath;
+  const PhotoDrawPage.fromImage(File image, {super.key, this.saveDirectoryPath, this.driveKmPath})
+      : initialImage = image, driveJsonPath = null;
 
   const PhotoDrawPage.fromDriveImage(File image, {super.key, this.saveDirectoryPath, String? jsonPath})
       : initialImage = image, driveJsonPath = jsonPath, driveKmPath = null;
@@ -79,12 +78,6 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
   final List<StickyNote> _notes = [];
   final List<StickyNote> _deletedNotes = []; // Silinen notları geri getirmek için
   final GlobalKey _notesOverlayKey = GlobalKey();
-  
-  // Sınıflandırma durumu - sınıf seviyesinde tutulacak
-  bool _isClasslessSave = false;
-  String _selectedKat = 'Diğer';
-  String _selectedAyna = 'Diğer';
-  String _selectedKm = 'Diğer';
   String? _draggingNoteId;
   Offset _dragDelta = Offset.zero;
   bool _isResizingAnyNote = false;
@@ -103,8 +96,7 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
       
       // Drive'dan gelen fotoğraf için özel JSON yükleme
       if (widget.driveJsonPath != null) {
-        print('🔍 Drive JSON yükleme başlatılıyor: ${widget.driveJsonPath}');
-        _loadFirebaseNotesForImage(widget.driveJsonPath!);
+        _loadDriveNotesForImage(widget.driveJsonPath!);
       } else {
         // Normal lokal JSON yükleme
         _tryLoadNotesForImage(_selectedImage!);
@@ -184,69 +176,42 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
     }
   }
 
-  Future<void> _loadFirebaseNotesForImage(String jsonPath) async {
+  Future<void> _loadDriveNotesForImage(String jsonPath) async {
     try {
-      print('📥 Google Drive JSON yükleniyor: $jsonPath');
+      print('📥 Drive JSON yükleniyor: $jsonPath');
       
       final file = File(jsonPath);
       if (await file.exists()) {
         final json = await file.readAsString();
-        print('📄 Google Drive JSON içeriği uzunluğu: ${json.length}');
-        print('📄 Google Drive JSON içeriği: ${json.substring(0, json.length.clamp(0, 200))}...');
+        print('📄 Drive JSON içeriği uzunluğu: ${json.length}');
+        print('📄 Drive JSON içeriği: ${json.substring(0, json.length.clamp(0, 200))}...');
         
-        // JSON'u parse et
-        final Map<String, dynamic> jsonData = jsonDecode(json);
-        
-        // Notes alanını kontrol et
-        String notesString = '';
-        if (jsonData['notes'] != null) {
-          if (jsonData['notes'] is String) {
-            // Notes string olarak saklanmış, direkt kullan
-            notesString = jsonData['notes'] as String;
-          } else if (jsonData['notes'] is List) {
-            // Notes array olarak saklanmış, JSON'a çevir
-            notesString = jsonEncode(jsonData['notes']);
-          }
-        }
-        
-        print('🔍 Notes string uzunluğu: ${notesString.length}');
-        print('🔍 Notes string: ${notesString.substring(0, notesString.length.clamp(0, 100))}...');
-        
-        if (notesString.isNotEmpty) {
-          final loaded = StickyNote.decodeList(notesString);
-          if (mounted) {
-            setState(() {
-              _notes
-                ..clear()
-                ..addAll(loaded);
-            });
-            print('✅ Google Drive\'dan ${loaded.length} not yüklendi');
-            
-            // Not sayısını kullanıcıya göster
-            if (loaded.isNotEmpty && context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Google Drive\'dan ${loaded.length} not yüklendi'),
-                  duration: const Duration(seconds: 2),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            }
-          }
-        } else {
-          print('⚠️ Notes alanı boş veya geçersiz');
-          if (mounted) {
-            setState(() {
-              _notes.clear();
-            });
+        final loaded = StickyNote.decodeList(json);
+        if (mounted) {
+          setState(() {
+            _notes
+              ..clear()
+              ..addAll(loaded);
+          });
+          print('✅ Drive\'dan ${loaded.length} not yüklendi');
+          
+          // Not sayısını kullanıcıya göster
+          if (loaded.isNotEmpty && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Drive\'dan ${loaded.length} not yüklendi'),
+                duration: const Duration(seconds: 2),
+                backgroundColor: Colors.green,
+              ),
+            );
           }
         }
       } else {
-        print('⚠️ Google Drive JSON dosyası bulunamadı: $jsonPath');
+        print('⚠️ Drive JSON dosyası bulunamadı: $jsonPath');
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Bu fotoğraf için Google Drive\'da not bulunamadı'),
+              content: Text('Bu fotoğraf için Drive\'da not bulunamadı'),
               duration: Duration(seconds: 1),
               backgroundColor: Colors.orange,
             ),
@@ -254,11 +219,11 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
         }
       }
     } catch (e) {
-      print('❌ Google Drive JSON yükleme hatası: $e');
+      print('❌ Drive JSON yükleme hatası: $e');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Google Drive notları yüklenemedi: $e'),
+            content: Text('Not yükleme hatası: $e'),
             duration: const Duration(seconds: 2),
             backgroundColor: Colors.red,
           ),
@@ -401,7 +366,6 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
       final content = StickyNote.encodeList(_notes);
       final file = File(notesPath);
       await file.writeAsString(content);
-      print('🔍 Not kaydedildi: $notesPath (${content.length} karakter)');
     } catch (_) {
       // Dış depolamaya yazılamadıysa, uygulama belgeleri altına yedekle
       try {
@@ -409,7 +373,6 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
         final content = StickyNote.encodeList(_notes);
         await fallback.writeAsString(content);
         debugPrint('ℹ️ Sidecar yedek konuma yazıldı: ${fallback.path}');
-        print('🔍 Not yedek konuma kaydedildi: ${fallback.path} (${content.length} karakter)');
       } catch (e) {
         debugPrint('❌ Sidecar yazma hatası: $e');
       }
@@ -467,6 +430,22 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
     });
   }
 
+  void _undoDeletedNote() {
+    if (_deletedNotes.isEmpty) return;
+    
+    final restoredNote = _deletedNotes.removeLast();
+    setState(() {
+      _notes.add(restoredNote);
+    });
+    _saveNotesForCurrentImage();
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Not geri getirildi'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
 
   Future<void> _saveImage() async {
     if (_selectedImage == null) return;
@@ -482,17 +461,7 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
         final pngBytes = byteData.buffer.asUint8List();
 
         // 1) Kullanıcıdan Kat / Ayna / Km bilgilerini iste
-        final _SaveTarget target;
-        try {
-          target = await _askAndResolveTargetDir();
-        } catch (e) {
-          // Kullanıcı iptal etti, hiçbir şey yapma
-          if (e.toString().contains('iptal etti')) {
-            setState(() => _isLoading = false);
-            return;
-          }
-          rethrow;
-        }
+        final _SaveTarget target = await _askAndResolveTargetDir();
 
         final now = DateTime.now();
         final fileName = 'annotated_${now.millisecondsSinceEpoch}.png';
@@ -507,13 +476,11 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
           final driveSvc = GoogleDriveService.instance;
           await driveSvc.init();
           if (driveSvc.cloudSyncEnabled && driveSvc.isSignedIn) {
-            // Klasör yolu: FotoJeolog/(Diğer | Kat/Ayna/Km)
+            // Klasör yolu: FotoJeolog/Kat/Ayna/Km
             final kat = _lastKat ?? 'Kat1';
             final ayna = _lastAyna ?? 'Ayna1';
             final km = _lastKm ?? 'Km1';
-            final List<String> parts = (kat == 'Sınıfsız')
-                ? ['Diğer']
-                : [kat, ayna, km];
+            final parts = ['FotoJeolog', kat, ayna, km];
 
             // PNG yükle
             await driveSvc.uploadFile(file.path, parts);
@@ -559,562 +526,121 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
     setState(() => _isLoading = false);
   }
 
+  Future<void> _saveImageToDrive() async {
+    // Drive oturum kontrol kontrolü - daha güçlü
+    final driveSvc = GoogleDriveService.instance;
+    if (!driveSvc.isSignedIn) {
+      print('❌ Drive oturum kapalı - kaydetme iptal');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Drive\'a giriş yapmalısınız! Önce Drive\'a giriş yapın.'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
 
-
-  Future<void> _saveImageBothFirebase() async {
     if (_selectedImage == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Kaydedilecek görüntü bulunamadı')),
       );
       return;
     }
-    
-    setState(() => _isLoading = true);
-    
-    try {
-      // Görüntü yakala
-      final boundary = _globalKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
-      final image = await boundary.toImage();
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) throw Exception('Görüntü yakalanamadı');
-      final pngBytes = byteData.buffer.asUint8List();
-      
-      // Notları hazırla
-      String notesString = '';
-      if (_notes.isNotEmpty) {
-        final notesData = _notes.map((n) => n.toJson()).toList();
-        notesString = jsonEncode(notesData);
-      }
-      
-      // Tek sınıflandırma sorusu - hem telefona hem drive'a aynı bilgilerle kaydet
-      final classificationResult = await _showFirebaseSaveDialogAndUpload(pngBytes, notesString);
-      
-      if (classificationResult != null) {
-        // Telefona da aynı sınıflandırma bilgileriyle kaydet
-        final kat = classificationResult['kat'] as String;
-        final ayna = classificationResult['ayna'] as String;
-        final km = classificationResult['km'] as String;
-        
-        // Telefon klasör yapısını oluştur
-        print('🔍 _resolveTargetDir çağrılıyor: kat="$kat", ayna="$ayna", km="$km"');
-        final target = await _resolveTargetDir(kat, ayna, km);
-        print('🔍 _resolveTargetDir sonucu: ${target.dir.path}');
-        final now = DateTime.now();
-        final fileName = 'annotated_${now.millisecondsSinceEpoch}.png';
-        final pngPath = '${target.dir.path}/$fileName';
-        final file = File(pngPath);
-        await file.writeAsBytes(pngBytes);
-        await _saveNotesSidecarFor(pngPath);
-        
-        // Telefon geçmişine de kaydet
-        await _saveToLocalHistory(kat, ayna, km);
-        
-        // Sadece başarılı kaydetme durumunda mesaj göster
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Telefona ve Google Drive\'a kaydedildi!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
-          ),
-        );
-      } else {
-        // İptal edildi, hiçbir şey yapma
-        print('🔍 Kullanıcı kaydetmeyi iptal etti');
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Kaydetme hatası: ${GoogleDriveService.instance.lastError ?? e}'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 6),
-        ),
-      );
-    }
-    
-    setState(() => _isLoading = false);
-  }
 
-  Future<Map<String, String>?> _showFirebaseSaveDialogAndUpload(Uint8List pngBytes, String notesJson) async {
-    print('🔍 _showFirebaseSaveDialogAndUpload çağrıldı, notesJson uzunluğu: ${notesJson.length}');
-    String? kat, ayna, km, not;
-    
-    // SharedPreferences'dan önceki değerleri yükle
-    final prefs = await SharedPreferences.getInstance();
-    final previousKatValues = prefs.getStringList('local_kat_history') ?? [];
-    final previousAynaValues = prefs.getStringList('local_ayna_history') ?? [];
-    final previousKmValues = prefs.getStringList('local_km_history') ?? [];
-    
-    print('🔍 SharedPreferences dan yuklenen degerler:');
-    print('   Kat gecmisi: $previousKatValues');
-    print('   Ayna gecmisi: $previousAynaValues');
-    print('   Km gecmisi: $previousKmValues');
-    
-    // Dropdown seçeneklerini oluştur - normalize et (Sınıfsız/Diğer/boşları ele, tekrarları kaldır, Diğer’i sonda tek ekle)
-    List<String> _normalizeOptions(List<String> list) {
-      final seen = <String>{};
-      final result = <String>[];
-      for (final raw in list) {
-        final v = raw.trim();
-        if (v.isEmpty || v == 'Sınıfsız' || v == 'Diğer') continue;
-        if (seen.add(v)) result.add(v);
-      }
-      result.add('Diğer');
-      return result;
-    }
-    final List<String> katOptions = _normalizeOptions(previousKatValues);
-    // Başlangıçta bağımlı filtreler (seçim oldukça güncellenecek)
-    List<String> aynaOptions = _normalizeOptions(previousAynaValues);
-    List<String> kmOptions = _normalizeOptions(previousKmValues);
-    
-    print('📋 Firebase Dropdown secenekleri:');
-    print('   Kat secenekleri: $katOptions');
-    print('   Ayna secenekleri: $aynaOptions');
-    print('   Km secenekleri: $kmOptions');
-    
-    final result = await showDialog<Map<String, String>>(
+    // 🎯 EĞER driveKmPath VARSA DİALOG ATLAYIP DİREKT O KLASÖRE KAYDET
+    Map<String, String>? result;
+    if (widget.driveKmPath != null && widget.driveKmPath!.length == 3) {
+      // Drive'dan geliyorsa dialog atla
+      result = {
+        'kat': widget.driveKmPath![0],
+        'ayna': widget.driveKmPath![1], 
+        'km': widget.driveKmPath![2],
+      };
+      print('🎯 Drive Km path var - dialog atlandı: ${widget.driveKmPath!.join('/')}');
+    } else {
+      // 🎯 Normal akış: SİNIFLANDIRMA EKRANINI GÖSTER
+      print('📋 Drive kaydetme için sınıflandırma ekranı açılıyor...');
+      
+      // Varsayılan değerleri hazırla
+      String? defaultKat = _lastKat;
+      String? defaultAyna = _lastAyna;
+      String? defaultKm = _lastKm;
+      
+      result = await showDialog<Map<String, String>>(
       context: context,
       barrierDismissible: false,
-      builder: (BuildContext context) {
-        // Güvenli değer seçimi - varsayılan olarak geçmişin ilkini kullan, yoksa 'Diğer'
-        String _selectedKat = katOptions.isNotEmpty ? katOptions.first : 'Diğer';
-        String _selectedAyna = aynaOptions.isNotEmpty ? aynaOptions.first : 'Diğer';
-        String _selectedKm = kmOptions.isNotEmpty ? kmOptions.first : 'Diğer';
-        
-        // Eğer seçilen değer hala options listesinde yoksa, ilk geçerli değeri kullan
-        if (!katOptions.contains(_selectedKat)) {
-          _selectedKat = katOptions.isNotEmpty ? katOptions.first : 'Diğer';
-        }
-        if (!aynaOptions.contains(_selectedAyna)) {
-          _selectedAyna = aynaOptions.isNotEmpty ? aynaOptions.first : 'Diğer';
-        }
-        if (!kmOptions.contains(_selectedKm)) {
-          _selectedKm = kmOptions.isNotEmpty ? kmOptions.first : 'Diğer';
-        }
-        
-        // Son güvenlik kontrolü - eğer hala geçersizse, _last değerleri sıfırla
-        if (!katOptions.contains(_selectedKat)) {
-          _lastKat = null;
-          _selectedKat = katOptions.isNotEmpty ? katOptions.first : 'Diğer';
-        }
-        if (!aynaOptions.contains(_selectedAyna)) {
-          _lastAyna = null;
-          _selectedAyna = aynaOptions.isNotEmpty ? aynaOptions.first : 'Diğer';
-        }
-        if (!kmOptions.contains(_selectedKm)) {
-          _lastKm = null;
-          _selectedKm = kmOptions.isNotEmpty ? kmOptions.first : 'Diğer';
-        }
-        
-        // Debug: Secilen degerleri kontrol et
-        print('🔍 Dropdown degerleri kontrol ediliyor:');
-        print('   _lastKat: "$_lastKat" (katOptions.contains: ${katOptions.contains(_lastKat)})');
-        print('   _selectedKat: "$_selectedKat" (katOptions.contains: ${katOptions.contains(_selectedKat)})');
-        print('   _lastAyna: "$_lastAyna" (aynaOptions.contains: ${aynaOptions.contains(_lastAyna)})');
-        print('   _selectedAyna: "$_selectedAyna" (aynaOptions.contains: ${aynaOptions.contains(_selectedAyna)})');
-        print('   _lastKm: "$_lastKm" (kmOptions.contains: ${kmOptions.contains(_lastKm)})');
-        print('   _selectedKm: "$_selectedKm" (kmOptions.contains: ${kmOptions.contains(_selectedKm)})');
-        
-        // Eğer hala geçersizse, _last değerleri tamamen sıfırla
-        if (!katOptions.contains(_selectedKat)) {
-          print('⚠️ _selectedKat hala geçersiz, _lastKat sıfırlanıyor');
-          _lastKat = null;
-          _selectedKat = katOptions.isNotEmpty ? katOptions.first : 'Diğer';
-        }
-        if (!aynaOptions.contains(_selectedAyna)) {
-          print('⚠️ _selectedAyna hala geçersiz, _lastAyna sıfırlanıyor');
-          _lastAyna = null;
-          _selectedAyna = aynaOptions.isNotEmpty ? aynaOptions.first : 'Diğer';
-        }
-        if (!kmOptions.contains(_selectedKm)) {
-          print('⚠️ _selectedKm hala geçersiz, _lastKm sıfırlanıyor');
-          _lastKm = null;
-          _selectedKm = kmOptions.isNotEmpty ? kmOptions.first : 'Diğer';
-        }
-        
-        // Son kontrol: Eğer hala geçersizse, SharedPreferences'ı temizle
-        if (!katOptions.contains(_selectedKat) || !aynaOptions.contains(_selectedAyna) || !kmOptions.contains(_selectedKm)) {
-          print('⚠️ Hala geçersiz değerler var, SharedPreferences temizleniyor');
-          // Async işlemi StatefulBuilder dışında yap
-          SharedPreferences.getInstance().then((prefs) async {
-            await prefs.remove('local_kat_history');
-            await prefs.remove('local_ayna_history');
-            await prefs.remove('local_km_history');
-          });
-          _lastKat = null;
-          _lastAyna = null;
-          _lastKm = null;
-          _selectedKat = katOptions.isNotEmpty ? katOptions.first : 'Diğer';
-          _selectedAyna = aynaOptions.isNotEmpty ? aynaOptions.first : 'Diğer';
-          _selectedKm = kmOptions.isNotEmpty ? kmOptions.first : 'Diğer';
-        }
-        
-        final katCtrl = TextEditingController();
-        final aynaCtrl = TextEditingController();
-        final kmCtrl = TextEditingController();
-        
-        bool showCustomKat = _selectedKat == 'Diğer';
-        bool showCustomAyna = _selectedAyna == 'Diğer';
-        bool showCustomKm = _selectedKm == 'Diğer';
-        // Sınıfsız kaydet durumu
-        bool isClasslessSave = false;
+      builder: (context) {
+        final katCtrl = TextEditingController(text: defaultKat ?? 'Kat1');
+        final aynaCtrl = TextEditingController(text: defaultAyna ?? 'Ayna1');
+        final kmCtrl = TextEditingController(text: defaultKm ?? 'Km1');
         String? error;
-        
         return StatefulBuilder(
           builder: (context, setLocal) {
             return AlertDialog(
               backgroundColor: const Color(0xFF1E2428),
-              title: Row(
-                children: [
-                  const Icon(Icons.cloud_upload, color: Colors.orange),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text('Google Drive Sınıflandırma', 
-                      style: TextStyle(color: Colors.white, fontSize: 16),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
+              title: const Text(
+                'Drive Kayıt Sınıflandırması',
+                style: TextStyle(color: Colors.white),
               ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Fotoğrafı sınıflandırın:', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                    const SizedBox(height: 16),
-                    
-                    // Kaydetme türü seçimi - iki buton
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton(
-                             onPressed: () {
-                               setLocal(() {
-                                 isClasslessSave = true;
-                                 _selectedKat = 'Sınıfsız';
-                                 _selectedAyna = '';  // Boş bırak
-                                 _selectedKm = '';    // Boş bırak
-                                 showCustomKat = false;
-                                 showCustomAyna = false;
-                                 showCustomKm = false;
-                                 error = null;
-                               });
-                             },
-                             style: ElevatedButton.styleFrom(
-                               backgroundColor: isClasslessSave ? Colors.orange : Colors.grey.shade700,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            child: const Text('Sınıfsız Kaydet', style: TextStyle(fontSize: 14)),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: ElevatedButton(
-                             onPressed: () {
-                               setLocal(() {
-                                 isClasslessSave = false;
-                                 _selectedKat = katOptions.isNotEmpty ? katOptions.first : 'Diğer';
-                                 _selectedAyna = aynaOptions.isNotEmpty ? aynaOptions.first : 'Diğer';
-                                 _selectedKm = kmOptions.isNotEmpty ? kmOptions.first : 'Diğer';
-                                 showCustomKat = _selectedKat == 'Diğer';
-                                 showCustomAyna = _selectedAyna == 'Diğer';
-                                 showCustomKm = _selectedKm == 'Diğer';
-                               });
-                             },
-                             style: ElevatedButton.styleFrom(
-                               backgroundColor: !isClasslessSave ? Colors.orange : Colors.grey.shade700,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            child: const Text('Sınıflandırılmış Kaydet', style: TextStyle(fontSize: 14)),
-                          ),
-                        ),
-                      ],
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: katCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Kat',
+                      labelStyle: TextStyle(color: Colors.white70),
                     ),
-                    const SizedBox(height: 16),
-                    
-                    if (!isClasslessSave) ...[
-                    // Kat Seçimi
-                    const Text('📐 Kat:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2A2F35),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey.shade600),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: katOptions.contains(_selectedKat) ? _selectedKat : katOptions.first,
-                        isExpanded: true,
-                        dropdownColor: const Color(0xFF2A2F35),
-                        style: const TextStyle(color: Colors.white),
-                        items: katOptions.map((String value) {
-                          return DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(value, style: const TextStyle(color: Colors.white)),
-                          );
-                        }).toList(),
-                        onChanged: (String? newValue) async {
-                          setLocal(() {
-                            _selectedKat = newValue!;
-                            showCustomKat = newValue == 'Diğer';
-                            if (!showCustomKat) katCtrl.clear();
-                          });
-                          // Kat seçimi değiştiğinde Ayna/Km listesini geçmişten filtrele
-                          final p = await SharedPreferences.getInstance();
-                          final String aynaKey = 'local_ayna_history_for_${_selectedKat}';
-                          final List<String> aynaForKat = p.getStringList(aynaKey) ?? [];
-                          List<String> _normalize(List<String> list) {
-                            final seen = <String>{};
-                            final result = <String>[];
-                            for (final raw in list) {
-                              final v = raw.trim();
-                              if (v.isEmpty || v == 'Sınıfsız' || v == 'Diğer') continue;
-                              if (seen.add(v)) result.add(v);
-                            }
-                            result.add('Diğer');
-                            return result;
-                          }
-                          final filteredAyna = _normalize(aynaForKat);
-                          // Kat değişince km'yi kat seviyesinde temizle, Ayna seçilince daraltacağız
-                          final List<String> kmGlobal = p.getStringList('local_km_history') ?? [];
-                          final filteredKm = _normalize(kmGlobal);
-                          setLocal(() {
-                            aynaOptions = filteredAyna;
-                            kmOptions = filteredKm;
-                            _selectedAyna = aynaOptions.isNotEmpty ? aynaOptions.first : 'Diğer';
-                            _selectedKm = kmOptions.isNotEmpty ? kmOptions.first : 'Diğer';
-                            showCustomAyna = _selectedAyna == 'Diğer';
-                            showCustomKm = _selectedKm == 'Diğer';
-                          });
-                        },
-                      ),
-                    ),
+                    style: const TextStyle(color: Colors.white),
                   ),
-                    if (showCustomKat) ...[
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: katCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Özel Kat Adı',
-                          labelStyle: TextStyle(color: Colors.white70),
-                          enabledBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: Colors.grey),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: Colors.orange),
-                          ),
-                        ),
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ],
-                    const SizedBox(height: 16),
-                    
-                    // Ayna Seçimi
-                    const Text('🪞 Ayna:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2A2F35),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey.shade600),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: aynaOptions.contains(_selectedAyna) ? _selectedAyna : aynaOptions.first,
-                        isExpanded: true,
-                        dropdownColor: const Color(0xFF2A2F35),
-                        style: const TextStyle(color: Colors.white),
-                        items: aynaOptions.map((String value) {
-                          return DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(value, style: const TextStyle(color: Colors.white)),
-                          );
-                        }).toList(),
-                        onChanged: (String? newValue) async {
-                          setLocal(() {
-                            _selectedAyna = newValue!;
-                            showCustomAyna = newValue == 'Diğer';
-                            if (!showCustomAyna) aynaCtrl.clear();
-                          });
-                          // Ayna değiştiğinde Km listesini kat+ayna geçmişine göre filtrele
-                          final p = await SharedPreferences.getInstance();
-                          final String kmKey = 'local_km_history_for_${_selectedKat}__${_selectedAyna}';
-                          final List<String> kmForKatAyna = p.getStringList(kmKey) ?? [];
-                          List<String> _normalize2(List<String> list) {
-                            final seen = <String>{};
-                            final result = <String>[];
-                            for (final raw in list) {
-                              final v = raw.trim();
-                              if (v.isEmpty || v == 'Sınıfsız' || v == 'Diğer') continue;
-                              if (seen.add(v)) result.add(v);
-                            }
-                            result.add('Diğer');
-                            return result;
-                          }
-                          final filteredKm = _normalize2(kmForKatAyna);
-                          setLocal(() {
-                            kmOptions = filteredKm;
-                            _selectedKm = kmOptions.isNotEmpty ? kmOptions.first : 'Diğer';
-                            showCustomKm = _selectedKm == 'Diğer';
-                          });
-                        },
+                  TextField(
+                    controller: aynaCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Ayna',
+                      labelStyle: TextStyle(color: Colors.white70),
+                    ),
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  TextField(
+                    controller: kmCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Kilometre',
+                      labelStyle: TextStyle(color: Colors.white70),
+                    ),
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  if (error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        error!,
+                        style: const TextStyle(color: Colors.redAccent),
                       ),
                     ),
-                    ),
-                    if (showCustomAyna) ...[
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: aynaCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Özel Ayna Adı',
-                          labelStyle: TextStyle(color: Colors.white70),
-                          enabledBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: Colors.grey),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: Colors.orange),
-                          ),
-                        ),
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ],
-                    const SizedBox(height: 16),
-                    
-                    // Km Seçimi
-                    const Text('📏 Kilometre:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2A2F35),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey.shade600),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: kmOptions.contains(_selectedKm) ? _selectedKm : kmOptions.first,
-                          isExpanded: true,
-                          dropdownColor: const Color(0xFF2A2F35),
-                          style: const TextStyle(color: Colors.white),
-                          items: kmOptions.map((String value) {
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(value, style: const TextStyle(color: Colors.white)),
-                            );
-                          }).toList(),
-                          onChanged: (String? newValue) {
-                            setLocal(() {
-                              _selectedKm = newValue!;
-                              showCustomKm = newValue == 'Diğer';
-                              if (!showCustomKm) kmCtrl.clear();
-                            });
-                          },
-                        ),
-                      ),
-                    ),
-                    if (showCustomKm) ...[
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: kmCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Özel Km Değeri (örn: Km2+350)',
-                          labelStyle: TextStyle(color: Colors.white70),
-                          enabledBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: Colors.grey),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: Colors.orange),
-                          ),
-                        ),
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ],
-                    ],
-                    
-                    if (error != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12.0),
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: Colors.red.withOpacity(0.3)),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.error_outline, color: Colors.redAccent, size: 20),
-                              const SizedBox(width: 8),
-                              Expanded(child: Text(error!, style: const TextStyle(color: Colors.redAccent))),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                ),
+                ],
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context, null),
-                  child: const Text('İptal', style: TextStyle(color: Colors.grey)),
+                  child: const Text('İptal'),
                 ),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.cloud_upload, color: Colors.white, size: 18),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
+                ElevatedButton(
                   onPressed: () {
-                    String finalKat;
-                    String finalAyna;
-                    String finalKm;
-                    if (isClasslessSave) {
-                      finalKat = 'Sınıfsız';
-                      finalAyna = 'Diğer';
-                      finalKm = '';
-                    } else {
-                      finalKat = showCustomKat ? katCtrl.text.trim() : _selectedKat;
-                      finalAyna = showCustomAyna ? aynaCtrl.text.trim() : _selectedAyna;
-                      finalKm = showCustomKm ? kmCtrl.text.trim() : _selectedKm;
-                    }
-                    
-                    if (!isClasslessSave && (finalKat.isEmpty || finalAyna.isEmpty || finalKm.isEmpty)) {
-                      setLocal(() => error = 'Lütfen tüm sınıflandırma alanlarını doldurun');
+                    final kat = katCtrl.text.trim();
+                    final ayna = aynaCtrl.text.trim();
+                    final km = kmCtrl.text.trim();
+                    if (kat.isEmpty || ayna.isEmpty || km.isEmpty) {
+                      setLocal(() => error = 'Lütfen tüm alanları doldurun');
                       return;
                     }
-                    
-                    if (!isClasslessSave) {
-                      if (showCustomKat && finalKat == 'Diğer') {
-                        setLocal(() => error = 'Lütfen özel kat adını girin');
-                        return;
-                      }
-                      
-                      if (showCustomAyna && finalAyna == 'Diğer') {
-                        setLocal(() => error = 'Lütfen özel ayna adını girin');
-                        return;
-                      }
-                      
-                      if (showCustomKm && finalKm == 'Diğer') {
-                        setLocal(() => error = 'Lütfen özel km değerini girin');
-                        return;
-                      }
-                    }
-                    
                     Navigator.pop(context, {
-                      'kat': finalKat,
-                      'ayna': finalAyna,
-                      'km': finalKm,
-                      'not': notesJson,
+                      'kat': kat,
+                      'ayna': ayna,
+                      'km': km,
                     });
                   },
-                  label: const Text('Google Drive\'a Kaydet', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  child: const Text('Drive\'a Kaydet'),
                 ),
               ],
             );
@@ -1122,205 +648,153 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
         );
       },
     );
-    if (result == null) return null;
-    kat = result['kat'];
-    ayna = result['ayna'];
-    km = result['km'];
-    not = result['not'];
-    print('🔍 Dialog sonucu:');
-    print('   kat: $kat, ayna: $ayna, km: $km');
-    print('   not: $not');
-    
-    // Son seçilen değerleri hatırla
-    _lastKat = kat;
-    _lastAyna = ayna;
-    _lastKm = km;
-    
-    // Değerleri SharedPreferences'a kaydet (geçmişe ekle) — sınıfsızda geçmişe yazma
-    if (kat != 'Sınıfsız') {
-      await _saveToHistory(kat!, ayna!, km!);
-    }
-    // Geçici dosya oluştur
-    final tempDir = Directory.systemTemp;
-    final fileName = 'jeoloji_${DateTime.now().millisecondsSinceEpoch}.png';
-    final tempFile = File('${tempDir.path}/$fileName');
-    await tempFile.writeAsBytes(pngBytes);
-    // Google Drive upload
-    final driveService = GoogleDriveService.instance;
-    final metadataService = PhotoMetadataService.instance;
-    
-    print('🔍 Google Drive upload parametreleri:');
-    print('   kat: $kat, ayna: $ayna, km: $km');
-    print('   not değeri: $not');
-    print('   notesJson değeri: $notesJson');
-    print('   Final notes: ${not ?? notesJson}');
-    
-    // Önce fotoğrafı Google Drive'a yükle
-    List<String> folderPath = [];
-    if (kat == 'Sınıfsız') {
-      // Sınıfsız kaydet: FotoJeolog altında sadece "Diğer" klasörüne kaydet
-      folderPath = ['Diğer'];
-      print('🔍 Sınıfsız kaydetme: folderPath = $folderPath (FotoJeolog/Diğer)');
-    } else {
-      // Normal sınıflandırma ile kaydet
-      folderPath = [kat!, ayna!, km!];
-      print('🔍 Normal kaydetme: folderPath = $folderPath');
     }
     
-    print('📤 Google Drive\'a yükleme başlıyor: $folderPath');
-    final imageFileId = await driveService.uploadFile(tempFile.path, folderPath);
-    print('📤 Google Drive yükleme sonucu: $imageFileId');
+    if (result == null) {
+      print('❌ Kullanıcı sınıflandırma iptal etti');
+      return; // Kullanıcı iptal etti
+    }
     
-    if (imageFileId != null) {
-      // Sonra metadata'yı kaydet
-      await metadataService.savePhotoMetadata(
-        imageFileName: 'jeoloji_${DateTime.now().millisecondsSinceEpoch}.png',
-        notes: not ?? notesJson,
-        projectName: 'FotoJeolog Saha',
-        kat: kat,
-        ayna: ayna,
-        km: km,
+    // Seçilen değerleri sakla
+    _lastKat = result['kat'];
+    _lastAyna = result['ayna'];
+    _lastKm = result['km'];
+    print('📁 Kullanıcı seçimi: Kat=${_lastKat}, Ayna=${_lastAyna}, Km=${_lastKm}');
+
+    setState(() => _isLoading = true);
+    
+    try {
+      print('🚀 Drive kaydetme başlatılıyor...');
+      
+      // Görüntü yakala
+      final boundary = _globalKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      final image = await boundary.toImage();
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) {
+        throw Exception('Görüntü yakalanamadı');
+      }
+
+      final pngBytes = byteData.buffer.asUint8List();
+
+      // Kat/Ayna/Km bilgilerini al (UI'dan)
+      String fileName = 'jeoloji_${DateTime.now().millisecondsSinceEpoch}.png';
+
+      // Drive klasör yolu
+      final parts = [
+        'FotoJeolog',
+        _lastKat ?? 'Genel',
+        _lastAyna ?? 'Ayna1', 
+        _lastKm ?? 'Km1'
+      ];
+
+      print('📁 Klasör yolu: ${parts.join('/')}');
+      print('📄 Dosya adı: $fileName');
+
+      // Geçici dosyayı sistem temp klasöründe oluştur
+      final tempDir = Directory.systemTemp;
+      final tempFile = File('${tempDir.path}/$fileName');
+      await tempFile.writeAsBytes(pngBytes);
+      
+      print('💾 Geçici dosya oluşturuldu: ${tempFile.path}');
+      
+      // Drive'a yükle ve sonucu kontrol et
+      final uploadResult = await driveSvc.uploadFile(tempFile.path, parts);
+      print('📤 Upload sonucu: $uploadResult');
+      
+      if (uploadResult == null) {
+        throw Exception('Drive yükleme başarısız - oturum kontrolü yapın');
+      }
+
+      // Notlar varsa onları da yükle
+      if (_notes.isNotEmpty) {
+        print('📝 ${_notes.length} not yükleniyor...');
+        final notesData = _notes.map((n) => n.toJson()).toList();
+        final notesJson = jsonEncode(notesData);
+        final notesFileName = fileName.replaceAll('.png', '_notes.json');
+        final notesFile = File('${tempDir.path}/$notesFileName');
+        await notesFile.writeAsString(notesJson);
+        
+        final notesUploadResult = await driveSvc.uploadFile(notesFile.path, parts);
+        print('📝 Notlar upload sonucu: $notesUploadResult');
+        
+        if (notesUploadResult == null) {
+          print('⚠️ Notlar yüklenemedi ama fotoğraf yüklendi');
+        }
+        
+        // Geçici not dosyasını temizle
+        if (await notesFile.exists()) {
+          await notesFile.delete();
+        }
+      }
+      
+      // Geçici PNG dosyasını temizle
+      if (await tempFile.exists()) {
+        await tempFile.delete();
+      }
+
+      print('✅ Drive kaydetme tamamlandı');
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ Drive\'a başarıyla kaydedildi${_notes.isNotEmpty ? ' (${_notes.length} not ile)' : ''}'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
       );
+    } catch (e) {
+      print('❌ Drive kaydetme hatası: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Drive kaydetme hatası: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+    
+    setState(() => _isLoading = false);
+  }
+
+  Future<void> _saveImageBoth() async {
+    setState(() => _isLoading = true);
+    
+    // Drive oturum kontrolü daha net yapılacak
+    final driveSvc = GoogleDriveService.instance;
+    bool driveAvailable = driveSvc.isSignedIn;
+    
+    try {
+      // Önce yerel kaydet
+      await _saveImage();
       
-      // Yeni fotoğraf eklendikten sonra cache'i temizle
-      metadataService.clearCache();
-      
-      print('✅ Google Drive upload başarılı: $imageFileId');
-    } else {
-      throw Exception('Fotoğraf Google Drive\'a yüklenemedi');
+      // Drive'a da kaydetmeye çalış
+      if (driveAvailable) {
+        await _saveImageToDrive();
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('📱 Telefona kaydedildi. Drive için giriş gerekli!'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Kaydetme hatası: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
+      );
     }
     
-    if (await tempFile.exists()) await tempFile.delete();
-    if (!mounted) return null;
-    final folderMessage = kat == 'Sınıfsız' ? 'Diğer' : '$kat/$ayna/$km';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('☁️ Google Drive\'a kaydedildi: $folderMessage'), backgroundColor: Colors.blue),
-    );
-    
-    // Sınıflandırma bilgilerini döndür
-    return {
-      'kat': kat!,
-      'ayna': ayna!,
-      'km': km!,
-    };
+    setState(() => _isLoading = false);
   }
 
-  // Google Drive geçmişine değerleri kaydet
-  Future<void> _saveToHistory(String kat, String ayna, String km) async {
-    final prefs = await SharedPreferences.getInstance();
-    
-    // Mevcut listeleri al
-    List<String> katHistory = prefs.getStringList('firebase_kat_history') ?? [];
-    List<String> aynaHistory = prefs.getStringList('firebase_ayna_history') ?? [];
-    List<String> kmHistory = prefs.getStringList('firebase_km_history') ?? [];
-    
-    // Yeni değerleri ekle (eğer zaten yoksa)
-    if (!katHistory.contains(kat)) {
-      katHistory.insert(0, kat); // En başa ekle (son kullanılan önce)
-      if (katHistory.length > 20) katHistory = katHistory.take(20).toList(); // Max 20 item
-    } else {
-      // Varsa önce çıkar, sonra başa ekle
-      katHistory.remove(kat);
-      katHistory.insert(0, kat);
-    }
-    
-    if (!aynaHistory.contains(ayna)) {
-      aynaHistory.insert(0, ayna);
-      if (aynaHistory.length > 20) aynaHistory = aynaHistory.take(20).toList();
-    } else {
-      aynaHistory.remove(ayna);
-      aynaHistory.insert(0, ayna);
-    }
-    
-    if (!kmHistory.contains(km)) {
-      kmHistory.insert(0, km);
-      if (kmHistory.length > 20) kmHistory = kmHistory.take(20).toList();
-    } else {
-      kmHistory.remove(km);
-      kmHistory.insert(0, km);
-    }
-    
-    // Kaydet
-    await prefs.setStringList('firebase_kat_history', katHistory);
-    await prefs.setStringList('firebase_ayna_history', aynaHistory);
-    await prefs.setStringList('firebase_km_history', kmHistory);
-  }
-
-  // Telefon geçmişine değerleri kaydet
-  Future<void> _saveToLocalHistory(String kat, String ayna, String km) async {
-    print('💾 Telefon geçmişine kaydediliyor: $kat, $ayna, $km');
-    final prefs = await SharedPreferences.getInstance();
-    
-    // Mevcut listeleri al
-    List<String> katHistory = prefs.getStringList('local_kat_history') ?? [];
-    List<String> aynaHistory = prefs.getStringList('local_ayna_history') ?? [];
-    List<String> kmHistory = prefs.getStringList('local_km_history') ?? [];
-    
-    print('📚 Mevcut geçmiş:');
-    print('   Kat: $katHistory');
-    print('   Ayna: $aynaHistory');
-    print('   Km: $kmHistory');
-    
-    // Yeni değerleri ekle (eğer zaten yoksa)
-    if (!katHistory.contains(kat)) {
-      katHistory.insert(0, kat); // En başa ekle (son kullanılan önce)
-      if (katHistory.length > 20) katHistory = katHistory.take(20).toList(); // Max 20 item
-    } else {
-      // Varsa önce çıkar, sonra başa ekle
-      katHistory.remove(kat);
-      katHistory.insert(0, kat);
-    }
-    
-    if (!aynaHistory.contains(ayna)) {
-      aynaHistory.insert(0, ayna);
-      if (aynaHistory.length > 20) aynaHistory = aynaHistory.take(20).toList();
-    } else {
-      aynaHistory.remove(ayna);
-      aynaHistory.insert(0, ayna);
-    }
-    
-    if (!kmHistory.contains(km)) {
-      kmHistory.insert(0, km);
-      if (kmHistory.length > 20) kmHistory = kmHistory.take(20).toList();
-    } else {
-      kmHistory.remove(km);
-      kmHistory.insert(0, km);
-    }
-    
-    // Kaydet (global listeler)
-    await prefs.setStringList('local_kat_history', katHistory);
-    await prefs.setStringList('local_ayna_history', aynaHistory);
-    await prefs.setStringList('local_km_history', kmHistory);
-
-    // Bağımlı geçmiş: Ayna listesi kat'a göre
-    final String aynaKey = 'local_ayna_history_for_$kat';
-    List<String> aynaForKat = prefs.getStringList(aynaKey) ?? [];
-    if (!aynaForKat.contains(ayna)) {
-      aynaForKat.insert(0, ayna);
-      if (aynaForKat.length > 50) aynaForKat = aynaForKat.take(50).toList();
-    } else {
-      aynaForKat.remove(ayna);
-      aynaForKat.insert(0, ayna);
-    }
-    await prefs.setStringList(aynaKey, aynaForKat);
-
-    // Bağımlı geçmiş: Km listesi kat+ayna'ya göre
-    final String kmKey = 'local_km_history_for_${kat}__${ayna}';
-    List<String> kmForKatAyna = prefs.getStringList(kmKey) ?? [];
-    if (!kmForKatAyna.contains(km)) {
-      kmForKatAyna.insert(0, km);
-      if (kmForKatAyna.length > 100) kmForKatAyna = kmForKatAyna.take(100).toList();
-    } else {
-      kmForKatAyna.remove(km);
-      kmForKatAyna.insert(0, km);
-    }
-    await prefs.setStringList(kmKey, kmForKatAyna);
-    
-    print('✅ Telefon geçmişi kaydedildi:');
-    print('   Kat: $katHistory');
-    print('   Ayna: $aynaHistory');
-    print('   Km: $kmHistory');
-  }
 
   Future<void> _saveImageToFirebase() async {
     if (_selectedImage == null) {
@@ -1337,18 +811,49 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) throw Exception('Görüntü yakalanamadı');
       final pngBytes = byteData.buffer.asUint8List();
+      
+      // 1) Kullanıcıdan Kat / Ayna / Km bilgilerini iste (telefona kaydetme gibi)
+      await _askAndResolveTargetDir();
+      
+      // Notları hazırla
       String notesString = '';
       if (_notes.isNotEmpty) {
         final notesData = _notes.map((n) => n.toJson()).toList();
         notesString = jsonEncode(notesData);
       }
-      print('🔍 Google Drive yükleme: ${_notes.length} not bulundu, notesString uzunluğu: ${notesString.length}');
-      await _showFirebaseSaveDialogAndUpload(pngBytes, notesString);
-    } catch (e) {
-      print('❌ Google Drive kaydetme hatası: $e');
+      
+      // Geçici dosya oluştur
+      final tempDir = Directory.systemTemp;
+      final fileName = 'jeoloji_${DateTime.now().millisecondsSinceEpoch}.png';
+      final tempFile = File('${tempDir.path}/$fileName');
+      await tempFile.writeAsBytes(pngBytes);
+      
+      // Firebase upload
+      final firebaseService = FirebaseStorageService.instance;
+      await firebaseService.uploadPhoto(
+        imagePath: tempFile.path,
+        notes: notesString,
+        projectName: 'FotoJeolog Saha',
+        kat: _lastKat,
+        ayna: _lastAyna,
+        km: _lastKm,
+      );
+      
+      // Geçici dosyayı temizle
+      if (await tempFile.exists()) await tempFile.delete();
+      
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ Google Drive kaydetme hatası: $e'), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text('🔥 Firebase\'e kaydedildi: ${_lastKat}/${_lastAyna}/${_lastKm}'), 
+          backgroundColor: Colors.orange
+        ),
+      );
+    } catch (e) {
+      print('❌ Firebase kaydetme hatası: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('❌ Firebase kaydetme hatası: $e'), backgroundColor: Colors.red),
       );
     }
     setState(() => _isLoading = false);
@@ -1373,366 +878,58 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
       }
     }
 
-    // SharedPreferences'dan önceki değerleri yükle
-    final prefs = await SharedPreferences.getInstance();
-    final previousKatValues = prefs.getStringList('local_kat_history') ?? [];
-    final previousAynaValues = prefs.getStringList('local_ayna_history') ?? [];
-    final previousKmValues = prefs.getStringList('local_km_history') ?? [];
-    
-    print('🔍 Telefon siniflandirma gecmisi yuklendi:');
-    print('   Kat gecmisi: $previousKatValues');
-    print('   Ayna gecmisi: $previousAynaValues');
-    print('   Km gecmisi: $previousKmValues');
-    
-    // Dropdown seçeneklerini oluştur - geçmiş + Diğer (Sınıfsız, Diğer ve boşlar hariç), tekilleştir
-    List<String> _dedupeFilter(List<String> list) {
-      final seen = <String>{};
-      final result = <String>[];
-      for (final raw in list) {
-        final v = raw.trim();
-        if (v.isEmpty || v == 'Sınıfsız' || v == 'Diğer') continue;
-        if (seen.add(v)) result.add(v);
-      }
-      return result;
-    }
-    List<String> katOptions = [..._dedupeFilter(previousKatValues), 'Diğer'];
-    List<String> aynaOptions = [..._dedupeFilter(previousAynaValues), 'Diğer'];
-    List<String> kmOptions = [..._dedupeFilter(previousKmValues), 'Diğer'];
-    
-    print('📋 Dropdown secenekleri:');
-    print('   Kat secenekleri: $katOptions');
-    print('   Ayna secenekleri: $aynaOptions');
-    print('   Km secenekleri: $kmOptions');
-
     final result = await showDialog<Map<String, String>>(
       context: context,
       barrierDismissible: false,
       builder: (context) {
-        // Güvenli değer seçimi - varsayılan olarak ilk öğeyi kullan
-        String _selectedKat = katOptions.first;
-        String _selectedAyna = aynaOptions.first;
-        String _selectedKm = kmOptions.first;
-        
-        // Eğer seçilen değer hala options listesinde yoksa, ilk geçerli değeri kullan
-        if (!katOptions.contains(_selectedKat)) {
-          _selectedKat = katOptions.isNotEmpty ? katOptions.first : 'Diğer';
-        }
-        if (!aynaOptions.contains(_selectedAyna)) {
-          _selectedAyna = aynaOptions.isNotEmpty ? aynaOptions.first : 'Diğer';
-        }
-        if (!kmOptions.contains(_selectedKm)) {
-          _selectedKm = kmOptions.isNotEmpty ? kmOptions.first : 'Diğer';
-        }
-        
-        // Son güvenlik kontrolü - eğer hala geçersizse, _last değerleri sıfırla
-        if (!katOptions.contains(_selectedKat)) {
-          _lastKat = null;
-          _selectedKat = katOptions.isNotEmpty ? katOptions.first : 'Diğer';
-        }
-        if (!aynaOptions.contains(_selectedAyna)) {
-          _lastAyna = null;
-          _selectedAyna = aynaOptions.isNotEmpty ? aynaOptions.first : 'Diğer';
-        }
-        if (!kmOptions.contains(_selectedKm)) {
-          _lastKm = null;
-          _selectedKm = kmOptions.isNotEmpty ? kmOptions.first : 'Diğer';
-        }
-        
-        // Debug: Secilen degerleri kontrol et
-        print('🔍 Google Drive Dropdown degerleri kontrol ediliyor:');
-        print('   _lastKat: "$_lastKat" (katOptions.contains: ${katOptions.contains(_lastKat)})');
-        print('   _selectedKat: "$_selectedKat" (katOptions.contains: ${katOptions.contains(_selectedKat)})');
-        print('   _lastAyna: "$_lastAyna" (aynaOptions.contains: ${aynaOptions.contains(_lastAyna)})');
-        print('   _selectedAyna: "$_selectedAyna" (aynaOptions.contains: ${aynaOptions.contains(_selectedAyna)})');
-        print('   _lastKm: "$_lastKm" (kmOptions.contains: ${kmOptions.contains(_lastKm)})');
-        print('   _selectedKm: "$_selectedKm" (kmOptions.contains: ${kmOptions.contains(_selectedKm)})');
-        
-        final katCtrl = TextEditingController();
-        final aynaCtrl = TextEditingController();
-        final kmCtrl = TextEditingController();
-        
-        bool showCustomKat = _selectedKat == 'Diğer';
-        bool showCustomAyna = _selectedAyna == 'Diğer';
-        bool showCustomKm = _selectedKm == 'Diğer';
-        bool isClasslessSave = _isClasslessSave; // Sınıf seviyesindeki değeri kullan
+        final katCtrl = TextEditingController(text: defaultKat ?? 'Kat1');
+        final aynaCtrl = TextEditingController(text: defaultAyna ?? 'Ayna1');
+        final kmCtrl = TextEditingController(text: defaultKm ?? 'Km1');
         String? error;
-        
         return StatefulBuilder(
           builder: (context, setLocal) {
             return AlertDialog(
               backgroundColor: const Color(0xFF1E2428),
-              title: Row(
-                children: [
-                  const Icon(Icons.phone_android, color: Colors.blue),
-                  const SizedBox(width: 8),
-                  const Text('Telefon Sınıflandırma', style: TextStyle(color: Colors.white, fontSize: 18)),
-                ],
+              title: const Text(
+                'Kayıt Sınıflandırması',
+                style: TextStyle(color: Colors.white),
               ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Fotoğrafı sınıflandırın:', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                    const SizedBox(height: 16),
-                    
-                    // Kaydetme türü seçimi - iki buton
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () {
-                              setLocal(() {
-                                isClasslessSave = true;
-                                _selectedKat = 'Sınıfsız';
-                                _selectedAyna = 'Sınıfsız';
-                                _selectedKm = 'Sınıfsız';
-                                showCustomKat = false;
-                                showCustomAyna = false;
-                                showCustomKm = false;
-                              });
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: isClasslessSave ? Colors.orange : Colors.grey.shade700,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            child: const Text('Sınıfsız Kaydet', style: TextStyle(fontSize: 14)),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () {
-                              setLocal(() {
-                                isClasslessSave = false;
-                                _selectedKat = katOptions.isNotEmpty ? katOptions.first : 'Diğer';
-                                _selectedAyna = aynaOptions.isNotEmpty ? aynaOptions.first : 'Diğer';
-                                _selectedKm = kmOptions.isNotEmpty ? kmOptions.first : 'Diğer';
-                                showCustomKat = _selectedKat == 'Diğer';
-                                showCustomAyna = _selectedAyna == 'Diğer';
-                                showCustomKm = _selectedKm == 'Diğer';
-                              });
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: !isClasslessSave ? Colors.orange : Colors.grey.shade700,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            child: const Text('Sınıflandırılmış Kaydet', style: TextStyle(fontSize: 14)),
-                          ),
-                        ),
-                      ],
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: katCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Kat',
+                      labelStyle: TextStyle(color: Colors.white70),
                     ),
-                    const SizedBox(height: 16),
-                    
-                    // Sınıfsız kaydet seçilmediyse sınıflandırma alanlarını göster
-                    if (!isClasslessSave) ...[
-                      // Kat Seçimi
-                    const Text('📐 Kat:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2A2F35),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey.shade600),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: katOptions.contains(_selectedKat) ? _selectedKat : (katOptions.isNotEmpty ? katOptions.first : 'Diğer'),
-                          isExpanded: true,
-                          dropdownColor: const Color(0xFF2A2F35),
-                          style: const TextStyle(color: Colors.white),
-                          items: katOptions.map((String value) {
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(value, style: const TextStyle(color: Colors.white)),
-                            );
-                          }).toList(),
-                          onChanged: (String? newValue) async {
-                            setLocal(() {
-                              _selectedKat = newValue!;
-                              showCustomKat = newValue == 'Diğer';
-                              if (!showCustomKat) katCtrl.clear();
-                            });
-                            final p = await SharedPreferences.getInstance();
-                            final String aynaKey = 'local_ayna_history_for_${_selectedKat}';
-                            final List<String> aynaForKat = p.getStringList(aynaKey) ?? [];
-                            List<String> _dedupeFilter(List<String> list) {
-                              final seen = <String>{};
-                              final result = <String>[];
-                              for (final raw in list) {
-                                final v = raw.trim();
-                                if (v.isEmpty || v == 'Sınıfsız' || v == 'Diğer') continue;
-                                if (seen.add(v)) result.add(v);
-                              }
-                              return result;
-                            }
-                            final filteredAyna = [..._dedupeFilter(aynaForKat), 'Diğer'];
-                            final List<String> kmGlobal = p.getStringList('local_km_history') ?? [];
-                            final filteredKm = [..._dedupeFilter(kmGlobal), 'Diğer'];
-                            setLocal(() {
-                              aynaOptions = filteredAyna;
-                              kmOptions = filteredKm;
-                              _selectedAyna = aynaOptions.isNotEmpty ? aynaOptions.first : 'Diğer';
-                              _selectedKm = kmOptions.isNotEmpty ? kmOptions.first : 'Diğer';
-                              showCustomAyna = _selectedAyna == 'Diğer';
-                              showCustomKm = _selectedKm == 'Diğer';
-                            });
-                          },
-                        ),
-                      ),
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  TextField(
+                    controller: aynaCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Ayna',
+                      labelStyle: TextStyle(color: Colors.white70),
                     ),
-                    if (showCustomKat) ...[
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: katCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Özel Kat Adı',
-                          labelStyle: TextStyle(color: Colors.white70),
-                          enabledBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: Colors.grey),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: Colors.blue),
-                          ),
-                        ),
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ],
-                    const SizedBox(height: 16),
-                    
-                    // Ayna Seçimi
-                    const Text('👁️ Ayna:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2A2F35),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey.shade600),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: aynaOptions.contains(_selectedAyna) ? _selectedAyna : (aynaOptions.isNotEmpty ? aynaOptions.first : 'Diğer'),
-                          isExpanded: true,
-                          dropdownColor: const Color(0xFF2A2F35),
-                          style: const TextStyle(color: Colors.white),
-                          items: aynaOptions.map((String value) {
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(value, style: const TextStyle(color: Colors.white)),
-                            );
-                          }).toList(),
-                          onChanged: (String? newValue) async {
-                            setLocal(() {
-                              _selectedAyna = newValue!;
-                              showCustomAyna = newValue == 'Diğer';
-                              if (!showCustomAyna) aynaCtrl.clear();
-                            });
-                            final p = await SharedPreferences.getInstance();
-                            final String kmKey = 'local_km_history_for_${_selectedKat}__${_selectedAyna}';
-                            final List<String> kmForKatAyna = p.getStringList(kmKey) ?? [];
-                            List<String> _dedupeFilter(List<String> list) {
-                              final seen = <String>{};
-                              final result = <String>[];
-                              for (final raw in list) {
-                                final v = raw.trim();
-                                if (v.isEmpty || v == 'Sınıfsız' || v == 'Diğer') continue;
-                                if (seen.add(v)) result.add(v);
-                              }
-                              return result;
-                            }
-                            final filteredKm = [..._dedupeFilter(kmForKatAyna), 'Diğer'];
-                            setLocal(() {
-                              kmOptions = filteredKm;
-                              _selectedKm = kmOptions.isNotEmpty ? kmOptions.first : 'Diğer';
-                              showCustomKm = _selectedKm == 'Diğer';
-                            });
-                          },
-                        ),
-                      ),
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  TextField(
+                    controller: kmCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Kilometre',
+                      labelStyle: TextStyle(color: Colors.white70),
                     ),
-                    if (showCustomAyna) ...[
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: aynaCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Özel Ayna Adı',
-                          labelStyle: TextStyle(color: Colors.white70),
-                          enabledBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: Colors.grey),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: Colors.blue),
-                          ),
-                        ),
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ],
-                    const SizedBox(height: 16),
-                    
-                    // Km Seçimi
-                    const Text('📍 Km:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2A2F35),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey.shade600),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: kmOptions.contains(_selectedKm) ? _selectedKm : (kmOptions.isNotEmpty ? kmOptions.first : 'Diğer'),
-                          isExpanded: true,
-                          dropdownColor: const Color(0xFF2A2F35),
-                          style: const TextStyle(color: Colors.white),
-                          items: kmOptions.map((String value) {
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(value, style: const TextStyle(color: Colors.white)),
-                            );
-                          }).toList(),
-                          onChanged: (String? newValue) {
-                            setLocal(() {
-                              _selectedKm = newValue!;
-                              showCustomKm = newValue == 'Diğer';
-                              if (!showCustomKm) kmCtrl.clear();
-                            });
-                          },
-                        ),
-                      ),
-                    ),
-                    if (showCustomKm) ...[
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: kmCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Özel Km Adı',
-                          labelStyle: TextStyle(color: Colors.white70),
-                          enabledBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: Colors.grey),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: Colors.blue),
-                          ),
-                        ),
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ],
-                    ], // Sınıfsız kaydet seçilmediyse sınıflandırma alanlarının kapanışı
-                    
-                    if (error != null) ...[
-                      const SizedBox(height: 16),
-                      Text(
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  if (error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Text(
                         error!,
-                        style: const TextStyle(color: Colors.red),
+                        style: const TextStyle(color: Colors.redAccent),
                       ),
-                    ],
-                  ],
-                ),
+                    ),
+                ],
               ),
               actions: [
                 TextButton(
@@ -1741,39 +938,20 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
                 ),
                 ElevatedButton(
                   onPressed: () {
-                    String finalKat = showCustomKat ? katCtrl.text.trim() : _selectedKat;
-                    String finalAyna = showCustomAyna ? aynaCtrl.text.trim() : _selectedAyna;
-                    String finalKm = showCustomKm ? kmCtrl.text.trim() : _selectedKm;
-
-                    if (!isClasslessSave && (finalKat.isEmpty || finalAyna.isEmpty || finalKm.isEmpty)) {
-                      setLocal(() => error = 'Lütfen tüm sınıflandırma alanlarını doldurun');
+                    final kat = katCtrl.text.trim();
+                    final ayna = aynaCtrl.text.trim();
+                    final km = kmCtrl.text.trim();
+                    if (kat.isEmpty || ayna.isEmpty || km.isEmpty) {
+                      setLocal(() => error = 'Lütfen tüm alanları doldurun');
                       return;
                     }
-
-                    if (!isClasslessSave) {
-                      if (showCustomKat && finalKat == 'Diğer') {
-                        setLocal(() => error = 'Lütfen özel kat adını girin');
-                        return;
-                      }
-
-                      if (showCustomAyna && finalAyna == 'Diğer') {
-                        setLocal(() => error = 'Lütfen özel ayna adını girin');
-                        return;
-                      }
-
-                      if (showCustomKm && finalKm == 'Diğer') {
-                        setLocal(() => error = 'Lütfen özel km değerini girin');
-                        return;
-                      }
-                    }
-                    
                     Navigator.pop(context, {
-                      'kat': finalKat,
-                      'ayna': finalAyna,
-                      'km': finalKm,
+                      'kat': kat,
+                      'ayna': ayna,
+                      'km': km,
                     });
                   },
-                  child: const Text('Telefona Kaydet', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  child: const Text('Kaydet'),
                 ),
               ],
             );
@@ -1782,9 +960,14 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
       },
     );
 
-    // İptal edilirse null döndür (kaydetme yapma)
+    // İptal edilirse varsayılana kaydet
     if (result == null) {
-      throw Exception('Kullanıcı kaydetmeyi iptal etti');
+      final base = await getApplicationDocumentsDirectory();
+      final dir = Directory('${base.path}/FotoJeolog');
+      if (!dir.existsSync()) {
+        dir.createSync(recursive: true);
+      }
+      return _SaveTarget(dir);
     }
     final kat = result['kat']!;
     final ayna = result['ayna']!;
@@ -1795,68 +978,19 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
     _lastAyna = ayna;
     _lastKm = km;
 
-    // Değerleri SharedPreferences'a kaydet (geçmişe ekle) — sınıfsızda geçmişe yazma
-    if (kat != 'Sınıfsız') {
-      await _saveToLocalHistory(kat, ayna, km);
-    }
-
     Directory target;
-    if (kat == 'Sınıfsız') {
-      // Sınıfsız kaydet: doğrudan FotoJeolog/Diğer klasörüne kaydet
-      if (PlatformUtils.isAndroid) {
-        final root = Directory('/storage/emulated/0/DCIM/FotoJeolog');
-        target = Directory('${root.path}/Diğer');
-      } else {
-        final base = await getApplicationDocumentsDirectory();
-        target = Directory('${base.path}/FotoJeolog/Diğer');
-      }
+    if (PlatformUtils.isAndroid) {
+      // Galeri/DCIM hiyerarşisine kaydet
+      final root = Directory('/storage/emulated/0/DCIM/FotoJeolog');
+      target = Directory('${root.path}/$kat/$ayna/$km');
     } else {
-      // Normal sınıflandırma ile kaydet
-      if (PlatformUtils.isAndroid) {
-        // Galeri/DCIM hiyerarşisine kaydet
-        final root = Directory('/storage/emulated/0/DCIM/FotoJeolog');
-        target = Directory('${root.path}/$kat/$ayna/$km');
-      } else {
-        // Diğer platformlarda uygulama belgeleri altına
-        final base = await getApplicationDocumentsDirectory();
-        target = Directory('${base.path}/FotoJeolog/$kat/$ayna/$km');
-      }
+      // Diğer platformlarda uygulama belgeleri altına
+      final base = await getApplicationDocumentsDirectory();
+      target = Directory('${base.path}/FotoJeolog/$kat/$ayna/$km');
     }
     if (!target.existsSync()) {
       target.createSync(recursive: true);
     }
-    return _SaveTarget(target, kat: kat, ayna: ayna, km: km);
-  }
-
-  // Sınıflandırma bilgileriyle direkt klasör oluştur (soru sormadan)
-  Future<_SaveTarget> _resolveTargetDir(String kat, String ayna, String km) async {
-    Directory target;
-    if (kat == 'Sınıfsız') {
-      // Sınıfsız kaydet: doğrudan FotoJeolog/Diğer klasörüne kaydet
-      if (PlatformUtils.isAndroid) {
-        final root = Directory('/storage/emulated/0/DCIM/FotoJeolog');
-        target = Directory('${root.path}/Diğer');
-      } else {
-        final base = await getApplicationDocumentsDirectory();
-        target = Directory('${base.path}/FotoJeolog/Diğer');
-      }
-      print('🔍 Sınıfsız kaydetme - hedef klasör: ${target.path}');
-    } else {
-      // Normal sınıflandırma ile kaydet
-      if (PlatformUtils.isAndroid) {
-        final root = Directory('/storage/emulated/0/DCIM/FotoJeolog');
-        target = Directory('${root.path}/$kat/$ayna/$km');
-      } else {
-        final base = await getApplicationDocumentsDirectory();
-        target = Directory('${base.path}/FotoJeolog/$kat/$ayna/$km');
-      }
-      print('🔍 Normal kaydetme - hedef klasör: ${target.path}');
-    }
-    
-    if (!target.existsSync()) {
-      target.createSync(recursive: true);
-    }
-    
     return _SaveTarget(target, kat: kat, ayna: ayna, km: km);
   }
 
@@ -1928,6 +1062,15 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
         shadowColor: Colors.orange.withOpacity(0.3),
         actions: [
           if (_selectedImage != null) ...[
+            // Silinen notları geri getir butonu (en solda)
+            IconButton(
+              icon: Icon(
+                Icons.restore_from_trash, 
+                color: _deletedNotes.isNotEmpty ? Colors.orange : Colors.grey.shade600,
+              ),
+              tooltip: 'Silinen notları geri getir (${_deletedNotes.length})',
+              onPressed: _deletedNotes.isNotEmpty ? _undoDeletedNote : null,
+            ),
             // Not ekleme butonu (ortada)
             IconButton(
               icon: const Icon(Icons.sticky_note_2, color: Colors.orange),
@@ -1939,15 +1082,32 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
               icon: const Icon(Icons.save, color: Colors.orange),
               enabled: !_isLoading,
               onSelected: (value) {
+                // Drive oturum kontrolü burada da yapılacak
+                if (value == 'drive' || value == 'both') {
+                  if (!GoogleDriveService.instance.isSignedIn) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('⚠️ Drive işlemi için önce giriş yapmalısınız!'),
+                        backgroundColor: Colors.orange,
+                        duration: Duration(seconds: 3),
+                      ),
+                    );
+                    return;
+                  }
+                }
+                
                 if (value == 'local') {
                   _saveImage();
+                } else if (value == 'drive') {
+                  _saveImageToDrive();
                 } else if (value == 'firebase') {
                   _saveImageToFirebase();
-                } else if (value == 'both_firebase') {
-                  _saveImageBothFirebase();
+                } else if (value == 'both') {
+                  _saveImageBoth();
                 }
               },
               itemBuilder: (context) {
+                final isSignedIn = GoogleDriveService.instance.isSignedIn;
                 return [
                   const PopupMenuItem(
                     value: 'local',
@@ -1965,20 +1125,45 @@ class _PhotoDrawPageState extends State<PhotoDrawPage> {
                       children: [
                         Icon(Icons.cloud_done, size: 20, color: Colors.orange),
                         SizedBox(width: 8),
-                        Text('Google Drive\'a kaydet'),
+                        Text('Firebase\'e kaydet'),
                       ],
                     ),
                   ),
-                  const PopupMenuItem(
-                    value: 'both_firebase',
-                    child: Wrap(
-                      children: [
-                        Icon(Icons.save_alt, size: 20, color: Colors.purple),
-                        SizedBox(width: 8),
-                        Text('Telefona ve Google Drive\'a kaydet'),
-                      ],
+                  // Drive seçenekleri sadece oturum açıkken göster
+                  if (isSignedIn) ...[
+                    const PopupMenuItem(
+                      value: 'drive',
+                      child: Row(
+                        children: [
+                          Icon(Icons.cloud_upload, size: 20, color: Colors.green),
+                          SizedBox(width: 8),
+                          Text('Drive\'a kaydet'),
+                        ],
+                      ),
                     ),
-                  ),
+                    const PopupMenuItem(
+                      value: 'both',
+                      child: Row(
+                        children: [
+                          Icon(Icons.save, size: 20, color: Colors.blue),
+                          SizedBox(width: 8),
+                          Text('Her ikisine kaydet'),
+                        ],
+                      ),
+                    ),
+                  ] else ...[
+                    // Oturum kapalıyken uyarı seçeneği göster
+                    PopupMenuItem(
+                      enabled: false,
+                      child: Row(
+                        children: [
+                          Icon(Icons.cloud_off, size: 20, color: Colors.grey),
+                          SizedBox(width: 8),
+                          Text('Drive - Giriş Gerekli', style: TextStyle(color: Colors.grey)),
+                        ],
+                      ),
+                    ),
+                  ],
                 ];
               },
             ),
@@ -2962,26 +2147,38 @@ class _StickyNoteWidgetState extends State<_StickyNoteWidget> {
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.all(8.0),
-                    child: TextField(
-                      controller: _ctrl,
-                      focusNode: _focus,
-                      maxLines: null,
-                      autofocus: true,
-                      keyboardType: TextInputType.multiline,
-                      textInputAction: TextInputAction.newline,
-                      textCapitalization: TextCapitalization.sentences,
-                      decoration: const InputDecoration(
-                        border: InputBorder.none,
-                        hintText: 'Not metni yazin...',
-                        hintStyle: TextStyle(color: Colors.black54),
-                        contentPadding: EdgeInsets.all(4),
-                      ),
-                      style: TextStyle(fontSize: note.fontSize, color: Color(note.textColor)),
-                      onTap: () {
-                        if (!_focus.hasFocus) {
-                          _focus.requestFocus();
-                        }
+                    child: GestureDetector(
+                      onTap: () async {
+                        _focus.requestFocus();
+                        await SystemChannels.textInput.invokeMethod('TextInput.show');
+                        Future.delayed(const Duration(milliseconds: 100), () async {
+                          if (mounted) {
+                            _focus.requestFocus();
+                            await SystemChannels.textInput.invokeMethod('TextInput.show');
+                          }
+                        });
                       },
+                      child: TextField(
+                        controller: _ctrl,
+                        focusNode: _focus,
+                        maxLines: null,
+                        autofocus: true,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.newline,
+                        decoration: const InputDecoration(
+                          border: InputBorder.none,
+                          hintText: 'Not metni...',
+                          hintStyle: TextStyle(color: Colors.black54),
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                        style: TextStyle(fontSize: note.fontSize, color: Color(note.textColor)),
+                        onTap: () async {
+                          if (!_focus.hasFocus) {
+                            _focus.requestFocus();
+                          }
+                          await SystemChannels.textInput.invokeMethod('TextInput.show');
+                        },
+                      ),
                     ),
                   ),
                 ),
@@ -3004,47 +2201,9 @@ class _StickyNoteWidgetState extends State<_StickyNoteWidget> {
                 ),
               ),
             ),
-            // Resize handle sağ alt köşede
-            Positioned(
-              right: 0,
-              bottom: 0,
-              child: GestureDetector(
-                onPanStart: (_) => widget.onResizeStart?.call(),
-                onPanEnd: (_) => widget.onResizeEnd?.call(),
-                onPanUpdate: (details) {
-                  final newWidth = (note.width + details.delta.dx).clamp(120.0, 400.0);
-                  final newHeight = (note.height + details.delta.dy).clamp(80.0, 300.0);
-                  widget.onChanged(StickyNote(
-                    id: note.id,
-                    x: note.x,
-                    y: note.y,
-                    text: note.text,
-                    fontSize: note.fontSize,
-                    collapsed: note.collapsed,
-                    author: note.author,
-                    color: note.color,
-                    textColor: note.textColor,
-                    createdAt: note.createdAt,
-                    updatedAt: DateTime.now(),
-                    width: newWidth,
-                    height: newHeight,
-                  ));
-                },
-                child: Container(
-                  width: 16,
-                  height: 16,
-                  decoration: BoxDecoration(
-                    color: Colors.brown.shade200,
-                    borderRadius: const BorderRadius.only(bottomRight: Radius.circular(8)),
-                  ),
-                  child: const Icon(Icons.drag_handle, size: 12, color: Colors.brown),
-                ),
-              ),
-            ),
           ],
         ),
-      ),
-    );
+      );
   }
 
   void _showColorPicker(BuildContext context, StickyNote note) {

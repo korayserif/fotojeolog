@@ -8,23 +8,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:yeni_clean/main.dart';
+import 'package:fotojeolog/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
+  testWidgets('Uygulama açılış smoke test', (WidgetTester tester) async {
+    // Uygulamayı başlat
     await tester.pumpWidget(const MyApp());
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    // Ana ekranda beklenen başlık ve butonların göründüğünü doğrula
+    expect(find.textContaining('Jeoloji'), findsWidgets);
+    expect(find.text('SAHA FOTOĞRAFI ÇEK'), findsOneWidget);
+    expect(find.text('SAHA ARŞİVİNDEN SEÇ'), findsOneWidget);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // Ayarlar ikonunun varlığını kontrol et
+    expect(find.byIcon(Icons.settings), findsOneWidget);
   });
 }

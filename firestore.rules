@@ -1,0 +1,20 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Kullanıcıya özgü erişim - HER ZAMAN GÜNCEL KULLANICIYI KONTROL ET
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Kullanıcının alt koleksiyonları (photos, vb.)
+      match /{document=**} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+    
+    // Genel koleksiyonlar için varsayılan kurallar
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

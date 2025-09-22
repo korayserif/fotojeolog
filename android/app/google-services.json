@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "835803975625",
+    "project_id": "jeolog-b6407",
+    "storage_bucket": "jeolog-b6407.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:835803975625:android:8b1ead4d779e4997bea218",
+        "android_client_info": {
+          "package_name": "com.example.yeni_clean"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "835803975625-0422ph74oanafvfv61mrs4mu81j330o2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA3iADKwz_uO7vGRG995nNPLXPZfhCiYDg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "835803975625-0422ph74oanafvfv61mrs4mu81j330o2.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

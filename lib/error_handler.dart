@@ -11,7 +11,8 @@ class ErrorHandler {
     // Burada hata loglama servisi entegre edilebilir
   }
 
-  static void showErrorDialog(BuildContext context, String title, String message) {
+  static void showErrorDialog(
+      BuildContext context, String title, String message) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
